@@ -1,1 +1,2153 @@
+name: Build BenchClient 1.21.11 JAR
 
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Generate Project Files
+        run: |
+          mkdir -p src/main/java/bench/client/core
+          mkdir -p src/main/java/bench/client/gui
+          mkdir -p src/main/java/bench/client/mixin
+          mkdir -p src/main/java/bench/client/modules/combat
+          mkdir -p src/main/java/bench/client/modules/movement
+          mkdir -p src/main/java/bench/client/modules/render
+          mkdir -p src/main/java/bench/client/modules/player
+          mkdir -p src/main/java/bench/client/modules/misc
+          mkdir -p src/main/resources/assets/benchclient/lang
+
+          cat << 'EOF' > settings.gradle
+          pluginManagement {
+              repositories {
+                  maven {
+                      name = 'Fabric'
+                      url = 'https://maven.fabricmc.net/'
+                  }
+                  mavenCentral()
+                  gradlePluginPortal()
+              }
+          }
+          rootProject.name = 'benchclient'
+          EOF
+
+          cat << 'EOF' > gradle.properties
+          org.gradle.jvmargs=-Xmx2G
+          org.gradle.parallel=true
+          minecraft_version=1.21.11
+          yarn_mappings=1.21.11+build.6
+          loader_version=0.18.4
+          loom_version=1.14.10
+          fabric_version=0.141.6+1.21.11
+          mod_version=1.0.0
+          maven_group=bench.client
+          archives_base_name=benchclient
+          EOF
+
+          cat << 'EOF' > build.gradle
+          plugins {
+              id 'fabric-loom' version "${loom_version}"
+              id 'maven-publish'
+          }
+
+          version = project.mod_version
+          group = project.maven_group
+
+          base {
+              archivesName = project.archives_base_name
+          }
+
+          repositories {
+              mavenCentral()
+          }
+
+          dependencies {
+              minecraft "com.mojang:minecraft:${project.minecraft_version}"
+              mappings "net.fabricmc:yarn:${project.yarn_mappings}:v2"
+              modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
+              modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
+          }
+
+          processResources {
+              inputs.property "version", project.version
+              filesMatching("fabric.mod.json") {
+                  expand "version": project.version
+              }
+          }
+
+          tasks.withType(JavaCompile).configureEach {
+              it.options.release = 21
+              it.options.encoding = "UTF-8"
+          }
+
+          java {
+              toolchain {
+                  languageVersion = JavaLanguageVersion.of(21)
+              }
+              withSourcesJar()
+              sourceCompatibility = JavaVersion.VERSION_21
+              targetCompatibility = JavaVersion.VERSION_21
+          }
+          EOF
+
+          cat << 'EOF' > src/main/resources/fabric.mod.json
+          {
+            "schemaVersion": 1,
+            "id": "benchclient",
+            "version": "${version}",
+            "name": "BenchClient",
+            "description": "Client-side utility mod for Minecraft 1.21.11.",
+            "authors": [
+              "Ahmad"
+            ],
+            "license": "MIT",
+            "environment": "client",
+            "entrypoints": {
+              "client": [
+                "bench.client.BenchClient"
+              ]
+            },
+            "mixins": [
+              "benchclient.mixins.json"
+            ],
+            "depends": {
+              "fabricloader": "*",
+              "minecraft": "=1.21.11",
+              "java": ">=21",
+              "fabric-api": "*"
+            }
+          }
+          EOF
+
+          cat << 'EOF' > src/main/resources/benchclient.mixins.json
+          {
+            "required": true,
+            "minVersion": "0.8",
+            "package": "bench.client.mixin",
+            "compatibilityLevel": "JAVA_21",
+            "client": [
+              "BlockRenderMixin",
+              "PlayerEntityMixin",
+              "ClientPlayerEntityMixin",
+              "EntityStepMixin",
+              "GameRendererMixin",
+              "MinecraftClientMixin",
+              "ClientPlayerInteractionManagerMixin"
+            ],
+            "injectors": {
+              "defaultRequire": 1
+            }
+          }
+          EOF
+
+          cat << 'EOF' > src/main/resources/assets/benchclient/lang/en_us.json
+          {
+            "key.category.benchclient.general": "BenchClient",
+            "key.benchclient.open_gui": "Open ClickGUI",
+            "key.benchclient.cycle_module": "Cycle Module"
+          }
+          EOF
+
+          cat << 'EOF' > src/main/java/bench/client/BenchClient.java
+          package bench.client;
+
+          import bench.client.core.Module;
+          import bench.client.core.ModuleManager;
+          import bench.client.core.SettingManager;
+          import bench.client.gui.ClickGui;
+          import bench.client.modules.combat.*;
+          import bench.client.modules.misc.*;
+          import bench.client.modules.movement.*;
+          import bench.client.modules.player.*;
+          import bench.client.modules.render.*;
+          import net.fabricmc.api.ClientModInitializer;
+          import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
+          import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
+          import net.fabricmc.fabric.api.client.message.v1.ClientSendMessageEvents;
+          import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
+          import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderEvents;
+          import net.minecraft.client.option.KeyBinding;
+          import net.minecraft.client.util.InputUtil;
+          import net.minecraft.util.Identifier;
+          import org.lwjgl.glfw.GLFW;
+
+          public class BenchClient implements ClientModInitializer {
+              public static final KeyBinding.Category KEY_CATEGORY = KeyBinding.Category.create(
+                      Identifier.of("benchclient", "general")
+              );
+
+              private static KeyBinding openGuiKey;
+              private static KeyBinding cycleModuleKey;
+
+              @Override
+              public void onInitializeClient() {
+                  ModuleManager.register(new KillAura());
+                  ModuleManager.register(new Criticals());
+                  ModuleManager.register(new AutoTotem());
+                  ModuleManager.register(new Reach());
+                  ModuleManager.register(new Velocity());
+
+                  ModuleManager.register(new Fly());
+                  ModuleManager.register(new Speed());
+                  ModuleManager.register(new Sprint());
+                  ModuleManager.register(new Step());
+                  ModuleManager.register(new NoFall());
+                  ModuleManager.register(new SafeWalk());
+                  ModuleManager.register(new AutoJump());
+
+                  ModuleManager.register(new Xray());
+                  ModuleManager.register(new Fullbright());
+                  ESP esp = new ESP();
+                  ModuleManager.register(esp);
+                  Tracers tracers = new Tracers();
+                  ModuleManager.register(tracers);
+                  Nametags nametags = new Nametags();
+                  ModuleManager.register(nametags);
+                  Hud hud = new Hud();
+                  ModuleManager.register(hud);
+
+                  ModuleManager.register(new AutoTool());
+                  ModuleManager.register(new FastPlace());
+                  ModuleManager.register(new FastBreak());
+
+                  ModuleManager.register(new Timer());
+                  ModuleManager.register(new AntiAFK());
+                  ChatSuffix chatSuffix = new ChatSuffix();
+                  ModuleManager.register(chatSuffix);
+
+                  SettingManager.load();
+
+                  openGuiKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
+                          "key.benchclient.open_gui",
+                          InputUtil.Type.KEYSYM,
+                          GLFW.GLFW_KEY_RIGHT_SHIFT,
+                          KEY_CATEGORY
+                  ));
+
+                  cycleModuleKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
+                          "key.benchclient.cycle_module",
+                          InputUtil.Type.KEYSYM,
+                          GLFW.GLFW_KEY_RIGHT_CONTROL,
+                          KEY_CATEGORY
+                  ));
+
+                  HudRenderCallback.EVENT.register((drawContext, renderTickCounter) -> hud.renderHud(drawContext));
+
+                  WorldRenderEvents.LAST.register(context -> {
+                      if (esp.isEnabled()) {
+                          esp.onWorldRender(context);
+                      }
+                      if (tracers.isEnabled()) {
+                          tracers.onWorldRender(context);
+                      }
+                      if (nametags.isEnabled()) {
+                          nametags.onWorldRender(context);
+                      }
+                  });
+
+                  ClientSendMessageEvents.MODIFY_CHAT.register(chatSuffix::modifyMessage);
+
+                  ClientTickEvents.END_CLIENT_TICK.register(client -> {
+                      while (openGuiKey.wasPressed()) {
+                          if (client.currentScreen instanceof ClickGui) {
+                              client.setScreen(null);
+                          } else {
+                              client.setScreen(new ClickGui());
+                          }
+                      }
+                      while (cycleModuleKey.wasPressed()) {
+                          ModuleManager.cycle();
+                      }
+                      if (client.player != null && client.world != null) {
+                          for (Module m : ModuleManager.all()) {
+                              if (m.getKeyBind() != GLFW.GLFW_KEY_UNKNOWN
+                                      && InputUtil.isKeyPressed(client.getWindow().getHandle(), m.getKeyBind())
+                                      && client.currentScreen == null) {
+                                  if (!m.wasKeyPressedLastTick()) {
+                                      m.setKeyPressedLastTick(true);
+                                      m.toggle();
+                                  }
+                              } else {
+                                  m.setKeyPressedLastTick(false);
+                              }
+                          }
+                          ModuleManager.tickAll(client);
+                      }
+                  });
+              }
+          }
+          EOF
+
+          cat << 'EOF' > src/main/java/bench/client/core/Category.java
+          package bench.client.core;
+
+          public enum Category {
+              COMBAT,
+              MOVEMENT,
+              RENDER,
+              PLAYER,
+              MISC
+          }
+          EOF
+
+          cat << 'EOF' > src/main/java/bench/client/core/Setting.java
+          package bench.client.core;
+
+          public abstract class Setting<T> {
+              private final String name;
+              protected T value;
+
+              public Setting(String name, T defaultValue) {
+                  this.name = name;
+                  this.value = defaultValue;
+              }
+
+              public String getName() {
+                  return name;
+              }
+
+              public T getValue() {
+                  return value;
+              }
+
+              public void setValue(T value) {
+                  this.value = value;
+                  SettingManager.save();
+              }
+          }
+          EOF
+
+          cat << 'EOF' > src/main/java/bench/client/core/BoolSetting.java
+          package bench.client.core;
+
+          public class BoolSetting extends Setting<Boolean> {
+              public BoolSetting(String name, boolean defaultValue) {
+                  super(name, defaultValue);
+              }
+
+              public void toggle() {
+                  setValue(!getValue());
+              }
+          }
+          EOF
+
+          cat << 'EOF' > src/main/java/bench/client/core/DoubleSetting.java
+          package bench.client.core;
+
+          public class DoubleSetting extends Setting<Double> {
+              private final double min;
+              private final double max;
+
+              public DoubleSetting(String name, double defaultValue, double min, double max) {
+                  super(name, clamp(defaultValue, min, max));
+                  this.min = min;
+                  this.max = max;
+              }
+
+              @Override
+              public void setValue(Double value) {
+                  super.setValue(clamp(value, min, max));
+              }
+
+              public double getMin() {
+                  return min;
+              }
+
+              public double getMax() {
+                  return max;
+              }
+
+              private static double clamp(double val, double min, double max) {
+                  return Math.max(min, Math.min(max, val));
+              }
+          }
+          EOF
+
+          cat << 'EOF' > src/main/java/bench/client/core/IntSetting.java
+          package bench.client.core;
+
+          public class IntSetting extends Setting<Integer> {
+              private final int min;
+              private final int max;
+
+              public IntSetting(String name, int defaultValue, int min, int max) {
+                  super(name, clamp(defaultValue, min, max));
+                  this.min = min;
+                  this.max = max;
+              }
+
+              @Override
+              public void setValue(Integer value) {
+                  super.setValue(clamp(value, min, max));
+              }
+
+              public int getMin() {
+                  return min;
+              }
+
+              public int getMax() {
+                  return max;
+              }
+
+              private static int clamp(int val, int min, int max) {
+                  return Math.max(min, Math.min(max, val));
+              }
+          }
+          EOF
+
+          cat << 'EOF' > src/main/java/bench/client/core/EnumSetting.java
+          package bench.client.core;
+
+          public class EnumSetting<E extends Enum<E>> extends Setting<E> {
+              private final E[] values;
+
+              public EnumSetting(String name, E defaultValue) {
+                  super(name, defaultValue);
+                  this.values = defaultValue.getDeclaringClass().getEnumConstants();
+              }
+
+              public E[] getValues() {
+                  return values;
+              }
+
+              public void cycle() {
+                  int next = (getValue().ordinal() + 1) % values.length;
+                  setValue(values[next]);
+              }
+
+              public void setByName(String name) {
+                  for (E constant : values) {
+                      if (constant.name().equalsIgnoreCase(name)) {
+                          setValue(constant);
+                          return;
+                      }
+                  }
+              }
+          }
+          EOF
+
+          cat << 'EOF' > src/main/java/bench/client/core/Module.java
+          package bench.client.core;
+
+          import net.minecraft.client.MinecraftClient;
+          import org.lwjgl.glfw.GLFW;
+
+          import java.util.ArrayList;
+          import java.util.List;
+
+          public abstract class Module {
+              private final String name;
+              private final Category category;
+              private boolean enabled;
+              private int keyBind;
+              private boolean keyPressedLastTick;
+              private final List<Setting<?>> settings = new ArrayList<>();
+
+              public Module(String name, Category category) {
+                  this(name, category, GLFW.GLFW_KEY_UNKNOWN);
+              }
+
+              public Module(String name, Category category, int keyBind) {
+                  this.name = name;
+                  this.category = category;
+                  this.keyBind = keyBind;
+              }
+
+              public String getName() {
+                  return name;
+              }
+
+              public Category getCategory() {
+                  return category;
+              }
+
+              public boolean isEnabled() {
+                  return enabled;
+              }
+
+              public void setEnabled(boolean enabled) {
+                  if (this.enabled != enabled) {
+                      this.enabled = enabled;
+                      if (enabled) {
+                          onEnable();
+                      } else {
+                          onDisable();
+                      }
+                      SettingManager.save();
+                  }
+              }
+
+              public void toggle() {
+                  setEnabled(!enabled);
+              }
+
+              public int getKeyBind() {
+                  return keyBind;
+              }
+
+              public void setKeyBind(int keyBind) {
+                  this.keyBind = keyBind;
+              }
+
+              public boolean wasKeyPressedLastTick() {
+                  return keyPressedLastTick;
+              }
+
+              public void setKeyPressedLastTick(boolean keyPressedLastTick) {
+                  this.keyPressedLastTick = keyPressedLastTick;
+              }
+
+              public List<Setting<?>> getSettings() {
+                  return settings;
+              }
+
+              protected <T extends Setting<?>> T add(T setting) {
+                  settings.add(setting);
+                  return setting;
+              }
+
+              public void onEnable() {
+              }
+
+              public void onDisable() {
+              }
+
+              public abstract void onTick(MinecraftClient client);
+          }
+          EOF
+
+          cat << 'EOF' > src/main/java/bench/client/core/ModuleManager.java
+          package bench.client.core;
+
+          import net.minecraft.client.MinecraftClient;
+
+          import java.util.ArrayList;
+          import java.util.Collections;
+          import java.util.List;
+
+          public final class ModuleManager {
+              private static final List<Module> MODULES = new ArrayList<>();
+              private static int cycleIndex = 0;
+
+              private ModuleManager() {
+              }
+
+              public static void register(Module module) {
+                  MODULES.add(module);
+              }
+
+              public static Module byName(String name) {
+                  for (Module m : MODULES) {
+                      if (m.getName().equalsIgnoreCase(name)) {
+                          return m;
+                      }
+                  }
+                  return null;
+              }
+
+              public static <T extends Module> T get(Class<T> clazz) {
+                  for (Module m : MODULES) {
+                      if (clazz.isInstance(m)) {
+                          return clazz.cast(m);
+                      }
+                  }
+                  return null;
+              }
+
+              public static List<Module> all() {
+                  return Collections.unmodifiableList(MODULES);
+              }
+
+              public static List<Module> byCategory(Category category) {
+                  List<Module> list = new ArrayList<>();
+                  for (Module m : MODULES) {
+                      if (m.getCategory() == category) {
+                          list.add(m);
+                      }
+                  }
+                  return list;
+              }
+
+              public static void cycle() {
+                  if (MODULES.isEmpty()) {
+                      return;
+                  }
+                  Module m = MODULES.get(cycleIndex % MODULES.size());
+                  m.toggle();
+                  cycleIndex = (cycleIndex + 1) % MODULES.size();
+              }
+
+              public static void tickAll(MinecraftClient client) {
+                  for (Module m : MODULES) {
+                      if (m.isEnabled()) {
+                          m.onTick(client);
+                      }
+                  }
+              }
+          }
+          EOF
+
+          cat << 'EOF' > src/main/java/bench/client/core/SettingManager.java
+          package bench.client.core;
+
+          import com.google.gson.*;
+          import net.fabricmc.loader.api.FabricLoader;
+
+          import java.io.IOException;
+          import java.io.Reader;
+          import java.io.Writer;
+          import java.nio.file.Files;
+          import java.nio.file.Path;
+
+          public final class SettingManager {
+              private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
+              private static boolean loading = false;
+
+              private SettingManager() {
+              }
+
+              private static Path getConfigPath() {
+                  return FabricLoader.getInstance().getConfigDir().resolve("benchclient.json");
+              }
+
+              public static void load() {
+                  Path path = getConfigPath();
+                  if (!Files.exists(path)) {
+                      save();
+                      return;
+                  }
+                  loading = true;
+                  try (Reader reader = Files.newBufferedReader(path)) {
+                      JsonElement rootElement = JsonParser.parseReader(reader);
+                      if (rootElement == null || !rootElement.isJsonObject()) {
+                          return;
+                      }
+                      JsonObject root = rootElement.getAsJsonObject();
+                      for (Module module : ModuleManager.all()) {
+                          if (!root.has(module.getName())) {
+                              continue;
+                          }
+                          JsonObject modObj = root.getAsJsonObject(module.getName());
+                          if (modObj.has("enabled")) {
+                              module.setEnabled(modObj.get("enabled").getAsBoolean());
+                          }
+                          if (modObj.has("settings") && modObj.get("settings").isJsonObject()) {
+                              JsonObject settingsObj = modObj.getAsJsonObject("settings");
+                              for (Setting<?> setting : module.getSettings()) {
+                                  if (!settingsObj.has(setting.getName())) {
+                                      continue;
+                                  }
+                                  JsonElement val = settingsObj.get(setting.getName());
+                                  if (setting instanceof BoolSetting boolSetting) {
+                                      boolSetting.setValue(val.getAsBoolean());
+                                  } else if (setting instanceof DoubleSetting doubleSetting) {
+                                      doubleSetting.setValue(val.getAsDouble());
+                                  } else if (setting instanceof IntSetting intSetting) {
+                                      intSetting.setValue(val.getAsInt());
+                                  } else if (setting instanceof EnumSetting<?> enumSetting) {
+                                      enumSetting.setByName(val.getAsString());
+                                  }
+                              }
+                          }
+                      }
+                  } catch (Exception ignored) {
+                  } finally {
+                      loading = false;
+                  }
+              }
+
+              public static void save() {
+                  if (loading) {
+                      return;
+                  }
+                  Path path = getConfigPath();
+                  JsonObject root = new JsonObject();
+                  for (Module module : ModuleManager.all()) {
+                      JsonObject modObj = new JsonObject();
+                      modObj.addProperty("enabled", module.isEnabled());
+                      JsonObject settingsObj = new JsonObject();
+                      for (Setting<?> setting : module.getSettings()) {
+                          if (setting instanceof BoolSetting b) {
+                              settingsObj.addProperty(b.getName(), b.getValue());
+                          } else if (setting instanceof DoubleSetting d) {
+                              settingsObj.addProperty(d.getName(), d.getValue());
+                          } else if (setting instanceof IntSetting i) {
+                              settingsObj.addProperty(i.getName(), i.getValue());
+                          } else if (setting instanceof EnumSetting<?> e) {
+                              settingsObj.addProperty(e.getName(), e.getValue().name());
+                          }
+                      }
+                      modObj.add("settings", settingsObj);
+                      root.add(module.getName(), modObj);
+                  }
+                  try {
+                      Files.createDirectories(path.getParent());
+                      try (Writer writer = Files.newBufferedWriter(path)) {
+                          GSON.toJson(root, writer);
+                      }
+                  } catch (IOException ignored) {
+                  }
+              }
+          }
+          EOF
+
+          cat << 'EOF' > src/main/java/bench/client/gui/ClickGui.java
+          package bench.client.gui;
+
+          import bench.client.core.*;
+          import net.minecraft.client.gui.DrawContext;
+          import net.minecraft.client.gui.screen.Screen;
+          import net.minecraft.text.Text;
+
+          import java.util.List;
+          import java.util.Locale;
+
+          public class ClickGui extends Screen {
+              private static Category selectedCategory = Category.COMBAT;
+              private static Module expandedModule = null;
+              private static int panelX = 40;
+              private static int panelY = 30;
+
+              private final int panelWidth = 360;
+              private final int headerHeight = 22;
+              private boolean draggingPanel = false;
+              private int dragOffsetX = 0;
+              private int dragOffsetY = 0;
+              private Setting<?> draggingSlider = null;
+
+              public ClickGui() {
+                  super(Text.literal("BenchClient ClickGUI"));
+              }
+
+              @Override
+              public void render(DrawContext context, int mouseX, int mouseY, float delta) {
+                  context.fill(0, 0, this.width, this.height, 0x70000000);
+
+                  List<Module> modules = ModuleManager.byCategory(selectedCategory);
+                  int bodyHeight = Math.max(modules.size() * 18 + 12, 160);
+
+                  context.fill(panelX, panelY, panelX + panelWidth, panelY + headerHeight + bodyHeight, 0xE0181820);
+                  context.fill(panelX, panelY, panelX + panelWidth, panelY + headerHeight, 0xFF282838);
+
+                  int tabWidth = panelWidth / Category.values().length;
+                  Category[] categories = Category.values();
+                  for (int i = 0; i < categories.length; i++) {
+                      Category cat = categories[i];
+                      int tx = panelX + i * tabWidth;
+                      int bgColor = (cat == selectedCategory) ? 0xFF3F51B5 : 0xFF242432;
+                      context.fill(tx, panelY, tx + tabWidth - 1, panelY + headerHeight, bgColor);
+                      context.drawCenteredTextWithShadow(this.textRenderer, cat.name(), tx + tabWidth / 2, panelY + 7, 0xFFFFFF);
+                  }
+
+                  int modX = panelX + 6;
+                  int modY = panelY + headerHeight + 6;
+                  int modWidth = 150;
+
+                  for (Module mod : modules) {
+                      int bg = mod.isEnabled() ? 0xFF3A7BD5 : 0xFF2A2A38;
+                      context.fill(modX, modY, modX + modWidth, modY + 16, bg);
+                      context.drawTextWithShadow(this.textRenderer, mod.getName(), modX + 5, modY + 4, 0xFFFFFF);
+                      if (!mod.getSettings().isEmpty()) {
+                          context.drawTextWithShadow(this.textRenderer, "+", modX + modWidth - 10, modY + 4, 0xCCCCCC);
+                      }
+                      modY += 18;
+                  }
+
+                  int settingsX = panelX + 166;
+                  int settingsY = panelY + headerHeight + 6;
+                  int settingsWidth = panelWidth - 172;
+
+                  if (expandedModule != null && expandedModule.getCategory() == selectedCategory) {
+                      context.drawTextWithShadow(this.textRenderer, expandedModule.getName() + " Settings", settingsX, settingsY, 0xFF80BFFF);
+                      settingsY += 14;
+                      for (Setting<?> setting : expandedModule.getSettings()) {
+                          context.fill(settingsX, settingsY, settingsX + settingsWidth, settingsY + 18, 0xFF252534);
+                          if (setting instanceof BoolSetting b) {
+                              String label = b.getName() + ": " + (b.getValue() ? "ON" : "OFF");
+                              int color = b.getValue() ? 0xFF55FF55 : 0xFFFF5555;
+                              context.drawTextWithShadow(this.textRenderer, label, settingsX + 4, settingsY + 5, color);
+                          } else if (setting instanceof EnumSetting<?> e) {
+                              String label = e.getName() + ": " + e.getValue().name();
+                              context.drawTextWithShadow(this.textRenderer, label, settingsX + 4, settingsY + 5, 0xFFFFFF);
+                          } else if (setting instanceof DoubleSetting d) {
+                              double pct = (d.getValue() - d.getMin()) / (d.getMax() - d.getMin());
+                              int fillW = (int) (settingsWidth * Math.max(0.0, Math.min(1.0, pct)));
+                              context.fill(settingsX, settingsY, settingsX + fillW, settingsY + 18, 0xFF3F51B5);
+                              String label = String.format(Locale.ROOT, "%s: %.2f", d.getName(), d.getValue());
+                              context.drawTextWithShadow(this.textRenderer, label, settingsX + 4, settingsY + 5, 0xFFFFFF);
+                          } else if (setting instanceof IntSetting i) {
+                              double pct = (double) (i.getValue() - i.getMin()) / Math.max(1, i.getMax() - i.getMin());
+                              int fillW = (int) (settingsWidth * Math.max(0.0, Math.min(1.0, pct)));
+                              context.fill(settingsX, settingsY, settingsX + fillW, settingsY + 18, 0xFF3F51B5);
+                              String label = i.getName() + ": " + i.getValue();
+                              context.drawTextWithShadow(this.textRenderer, label, settingsX + 4, settingsY + 5, 0xFFFFFF);
+                          }
+                          settingsY += 20;
+                      }
+                  }
+              }
+
+              @Override
+              public boolean mouseClicked(double mouseX, double mouseY, int button) {
+                  int tabWidth = panelWidth / Category.values().length;
+                  if (mouseX >= panelX && mouseX <= panelX + panelWidth && mouseY >= panelY && mouseY <= panelY + headerHeight) {
+                      if (button == 0) {
+                          int idx = (int) ((mouseX - panelX) / tabWidth);
+                          Category[] cats = Category.values();
+                          if (idx >= 0 && idx < cats.length) {
+                              selectedCategory = cats[idx];
+                              expandedModule = null;
+                          }
+                          draggingPanel = true;
+                          dragOffsetX = (int) mouseX - panelX;
+                          dragOffsetY = (int) mouseY - panelY;
+                          return true;
+                      }
+                  }
+
+                  List<Module> modules = ModuleManager.byCategory(selectedCategory);
+                  int modX = panelX + 6;
+                  int modY = panelY + headerHeight + 6;
+                  int modWidth = 150;
+
+                  for (Module mod : modules) {
+                      if (mouseX >= modX && mouseX <= modX + modWidth && mouseY >= modY && mouseY <= modY + 16) {
+                          if (button == 0) {
+                              mod.toggle();
+                          } else if (button == 1) {
+                              expandedModule = mod;
+                          }
+                          return true;
+                      }
+                      modY += 18;
+                  }
+
+                  if (expandedModule != null && expandedModule.getCategory() == selectedCategory) {
+                      int settingsX = panelX + 166;
+                      int settingsY = panelY + headerHeight + 20;
+                      int settingsWidth = panelWidth - 172;
+
+                      for (Setting<?> setting : expandedModule.getSettings()) {
+                          if (mouseX >= settingsX && mouseX <= settingsX + settingsWidth && mouseY >= settingsY && mouseY <= settingsY + 18) {
+                              if (setting instanceof BoolSetting b) {
+                                  b.toggle();
+                              } else if (setting instanceof EnumSetting<?> e) {
+                                  e.cycle();
+                              } else if (setting instanceof DoubleSetting || setting instanceof IntSetting) {
+                                  draggingSlider = setting;
+                                  updateSliderValue(setting, mouseX, settingsX, settingsWidth);
+                              }
+                              return true;
+                          }
+                          settingsY += 20;
+                      }
+                  }
+
+                  return super.mouseClicked(mouseX, mouseY, button);
+              }
+
+              @Override
+              public boolean mouseDragged(double mouseX, double mouseY, int button, double deltaX, double deltaY) {
+                  if (draggingPanel) {
+                      panelX = (int) mouseX - dragOffsetX;
+                      panelY = (int) mouseY - dragOffsetY;
+                      return true;
+                  }
+                  if (draggingSlider != null) {
+                      int settingsX = panelX + 166;
+                      int settingsWidth = panelWidth - 172;
+                      updateSliderValue(draggingSlider, mouseX, settingsX, settingsWidth);
+                      return true;
+                  }
+                  return super.mouseDragged(mouseX, mouseY, button, deltaX, deltaY);
+              }
+
+              @Override
+              public boolean mouseReleased(double mouseX, double mouseY, int button) {
+                  draggingPanel = false;
+                  draggingSlider = null;
+                  SettingManager.save();
+                  return super.mouseReleased(mouseX, mouseY, button);
+              }
+
+              private void updateSliderValue(Setting<?> setting, double mouseX, int x, int width) {
+                  double pct = Math.max(0.0, Math.min(1.0, (mouseX - x) / (double) width));
+                  if (setting instanceof DoubleSetting d) {
+                      double raw = d.getMin() + pct * (d.getMax() - d.getMin());
+                      double rounded = Math.round(raw * 100.0) / 100.0;
+                      d.setValue(rounded);
+                  } else if (setting instanceof IntSetting i) {
+                      int val = (int) Math.round(i.getMin() + pct * (i.getMax() - i.getMin()));
+                      i.setValue(val);
+                  }
+              }
+
+              @Override
+              public boolean shouldPause() {
+                  return false;
+              }
+          }
+          EOF
+
+          cat << 'EOF' > src/main/java/bench/client/modules/combat/KillAura.java
+          package bench.client.modules.combat;
+
+          import bench.client.core.*;
+          import net.minecraft.client.MinecraftClient;
+          import net.minecraft.command.argument.EntityAnchorArgumentType;
+          import net.minecraft.entity.Entity;
+          import net.minecraft.entity.LivingEntity;
+          import net.minecraft.entity.player.PlayerEntity;
+          import net.minecraft.util.Hand;
+
+          public class KillAura extends Module {
+              public final DoubleSetting range = add(new DoubleSetting("Range", 4.2, 2.0, 6.0));
+              public final BoolSetting playersOnly = add(new BoolSetting("PlayersOnly", false));
+              public final IntSetting cps = add(new IntSetting("CPS", 10, 1, 20));
+
+              private int tickTimer = 0;
+
+              public KillAura() {
+                  super("KillAura", Category.COMBAT);
+              }
+
+              @Override
+              public void onTick(MinecraftClient client) {
+                  if (client.player == null || client.world == null || client.interactionManager == null) {
+                      return;
+                  }
+                  tickTimer++;
+                  int delayTicks = Math.max(1, 20 / cps.getValue());
+                  if (tickTimer < delayTicks) {
+                      return;
+                  }
+
+                  double maxDistSq = range.getValue() * range.getValue();
+                  LivingEntity nearest = null;
+                  double nearestDistSq = maxDistSq;
+
+                  for (Entity entity : client.world.getEntities()) {
+                      if (entity == client.player || !(entity instanceof LivingEntity living)) {
+                          continue;
+                      }
+                      if (!living.isAlive() || living.isDead()) {
+                          continue;
+                      }
+                      if (playersOnly.getValue() && !(living instanceof PlayerEntity)) {
+                          continue;
+                      }
+                      double dSq = client.player.squaredDistanceTo(living);
+                      if (dSq <= nearestDistSq) {
+                          nearestDistSq = dSq;
+                          nearest = living;
+                      }
+                  }
+
+                  if (nearest != null) {
+                      tickTimer = 0;
+                      Criticals criticals = ModuleManager.get(Criticals.class);
+                      if (criticals != null && criticals.isEnabled()) {
+                          criticals.triggerCritical(client);
+                      }
+                      client.player.lookAt(EntityAnchorArgumentType.EntityAnchor.EYES, nearest.getEyePos());
+                      client.interactionManager.attackEntity(client.player, nearest);
+                      client.player.swingHand(Hand.MAIN_HAND);
+                  }
+              }
+          }
+          EOF
+
+          cat << 'EOF' > src/main/java/bench/client/modules/combat/Criticals.java
+          package bench.client.modules.combat;
+
+          import bench.client.core.Category;
+          import bench.client.core.DoubleSetting;
+          import bench.client.core.Module;
+          import net.minecraft.client.MinecraftClient;
+
+          public class Criticals extends Module {
+              public final DoubleSetting motionY = add(new DoubleSetting("MotionY", 0.12, 0.05, 0.42));
+
+              public Criticals() {
+                  super("Criticals", Category.COMBAT);
+              }
+
+              @Override
+              public void onTick(MinecraftClient client) {
+              }
+
+              public void triggerCritical(MinecraftClient client) {
+                  if (client.player == null) {
+                      return;
+                  }
+                  if (client.player.isOnGround() && !client.player.isSubmergedInWater() && !client.player.isInLava()) {
+                      client.player.addVelocity(0.0, motionY.getValue(), 0.0);
+                  }
+              }
+          }
+          EOF
+
+          cat << 'EOF' > src/main/java/bench/client/modules/combat/AutoTotem.java
+          package bench.client.modules.combat;
+
+          import bench.client.core.Category;
+          import bench.client.core.DoubleSetting;
+          import bench.client.core.Module;
+          import net.minecraft.client.MinecraftClient;
+          import net.minecraft.item.Items;
+          import net.minecraft.screen.slot.SlotActionType;
+
+          public class AutoTotem extends Module {
+              public final DoubleSetting healthThreshold = add(new DoubleSetting("Health", 12.0, 2.0, 20.0));
+
+              public AutoTotem() {
+                  super("AutoTotem", Category.COMBAT);
+              }
+
+              @Override
+              public void onTick(MinecraftClient client) {
+                  if (client.player == null || client.interactionManager == null) {
+                      return;
+                  }
+                  float totalHealth = client.player.getHealth() + client.player.getAbsorptionAmount();
+                  if (totalHealth > healthThreshold.getValue()) {
+                      return;
+                  }
+                  if (client.player.getOffHandStack().isOf(Items.TOTEM_OF_UNDYING)) {
+                      return;
+                  }
+
+                  int totemSlot = -1;
+                  for (int i = 0; i < 36; i++) {
+                      if (client.player.getInventory().getStack(i).isOf(Items.TOTEM_OF_UNDYING)) {
+                          totemSlot = (i < 9) ? (i + 36) : i;
+                          break;
+                      }
+                  }
+
+                  if (totemSlot != -1) {
+                      int syncId = client.player.currentScreenHandler.syncId;
+                      client.interactionManager.clickSlot(syncId, totemSlot, 40, SlotActionType.SWAP, client.player);
+                  }
+              }
+          }
+          EOF
+
+          cat << 'EOF' > src/main/java/bench/client/modules/combat/Reach.java
+          package bench.client.modules.combat;
+
+          import bench.client.core.Category;
+          import bench.client.core.DoubleSetting;
+          import bench.client.core.Module;
+          import net.minecraft.client.MinecraftClient;
+
+          public class Reach extends Module {
+              public final DoubleSetting range = add(new DoubleSetting("Range", 4.5, 3.0, 6.0));
+
+              public Reach() {
+                  super("Reach", Category.COMBAT);
+              }
+
+              @Override
+              public void onTick(MinecraftClient client) {
+              }
+          }
+          EOF
+
+          cat << 'EOF' > src/main/java/bench/client/modules/combat/Velocity.java
+          package bench.client.modules.combat;
+
+          import bench.client.core.Category;
+          import bench.client.core.DoubleSetting;
+          import bench.client.core.Module;
+          import net.minecraft.client.MinecraftClient;
+
+          public class Velocity extends Module {
+              public final DoubleSetting horizontal = add(new DoubleSetting("Horizontal", 0.0, 0.0, 1.0));
+              public final DoubleSetting vertical = add(new DoubleSetting("Vertical", 0.0, 0.0, 1.0));
+
+              public Velocity() {
+                  super("Velocity", Category.COMBAT);
+              }
+
+              @Override
+              public void onTick(MinecraftClient client) {
+              }
+          }
+          EOF
+
+          cat << 'EOF' > src/main/java/bench/client/modules/movement/Fly.java
+          package bench.client.modules.movement;
+
+          import bench.client.core.Category;
+          import bench.client.core.DoubleSetting;
+          import bench.client.core.Module;
+          import net.minecraft.client.MinecraftClient;
+
+          public class Fly extends Module {
+              public final DoubleSetting speed = add(new DoubleSetting("Speed", 0.1, 0.05, 0.5));
+
+              public Fly() {
+                  super("Fly", Category.MOVEMENT);
+              }
+
+              @Override
+              public void onTick(MinecraftClient client) {
+                  if (client.player == null) {
+                      return;
+                  }
+                  client.player.getAbilities().allowFlying = true;
+                  client.player.getAbilities().flying = true;
+                  client.player.getAbilities().setFlySpeed(speed.getValue().floatValue());
+                  client.player.fallDistance = 0.0f;
+              }
+
+              @Override
+              public void onDisable() {
+                  MinecraftClient client = MinecraftClient.getInstance();
+                  if (client.player != null) {
+                      if (!client.player.isCreative() && !client.player.isSpectator()) {
+                          client.player.getAbilities().allowFlying = false;
+                          client.player.getAbilities().flying = false;
+                      }
+                      client.player.getAbilities().setFlySpeed(0.05f);
+                  }
+              }
+          }
+          EOF
+
+          cat << 'EOF' > src/main/java/bench/client/modules/movement/Speed.java
+          package bench.client.modules.movement;
+
+          import bench.client.core.Category;
+          import bench.client.core.DoubleSetting;
+          import bench.client.core.Module;
+          import net.minecraft.client.MinecraftClient;
+          import net.minecraft.util.math.Vec3d;
+
+          public class Speed extends Module {
+              public final DoubleSetting mult = add(new DoubleSetting("Mult", 1.3, 1.0, 3.0));
+
+              public Speed() {
+                  super("Speed", Category.MOVEMENT);
+              }
+
+              @Override
+              public void onTick(MinecraftClient client) {
+                  if (client.player == null || !client.player.isOnGround()) {
+                      return;
+                  }
+                  if (client.player.input.movementForward == 0 && client.player.input.movementSideways == 0) {
+                      return;
+                  }
+                  Vec3d vel = client.player.getVelocity();
+                  double factor = Math.min(mult.getValue(), 1.25);
+                  client.player.setVelocity(vel.x * factor, vel.y, vel.z * factor);
+              }
+          }
+          EOF
+
+          cat << 'EOF' > src/main/java/bench/client/modules/movement/Sprint.java
+          package bench.client.modules.movement;
+
+          import bench.client.core.BoolSetting;
+          import bench.client.core.Category;
+          import bench.client.core.Module;
+          import net.minecraft.client.MinecraftClient;
+
+          public class Sprint extends Module {
+              public final BoolSetting omniSprint = add(new BoolSetting("OmniSprint", false));
+
+              public Sprint() {
+                  super("Sprint", Category.MOVEMENT);
+              }
+
+              @Override
+              public void onTick(MinecraftClient client) {
+                  if (client.player == null) {
+                      return;
+                  }
+                  boolean moving = omniSprint.getValue()
+                          ? (client.player.input.movementForward != 0 || client.player.input.movementSideways != 0)
+                          : (client.player.input.movementForward > 0);
+                  if (moving && !client.player.isSneaking() && !client.player.horizontalCollision) {
+                      client.player.setSprinting(true);
+                  }
+              }
+          }
+          EOF
+
+          cat << 'EOF' > src/main/java/bench/client/modules/movement/Step.java
+          package bench.client.modules.movement;
+
+          import bench.client.core.Category;
+          import bench.client.core.DoubleSetting;
+          import bench.client.core.Module;
+          import net.minecraft.client.MinecraftClient;
+
+          public class Step extends Module {
+              public final DoubleSetting height = add(new DoubleSetting("Height", 1.5, 0.5, 2.5));
+
+              public Step() {
+                  super("Step", Category.MOVEMENT);
+              }
+
+              @Override
+              public void onTick(MinecraftClient client) {
+              }
+          }
+          EOF
+
+          cat << 'EOF' > src/main/java/bench/client/modules/movement/NoFall.java
+          package bench.client.modules.movement;
+
+          import bench.client.core.Category;
+          import bench.client.core.Module;
+          import net.minecraft.client.MinecraftClient;
+          import net.minecraft.network.packet.c2s.play.PlayerMoveC2SPacket;
+
+          public class NoFall extends Module {
+              public NoFall() {
+                  super("NoFall", Category.MOVEMENT);
+              }
+
+              @Override
+              public void onTick(MinecraftClient client) {
+                  if (client.player == null || client.player.isOnGround()) {
+                      return;
+                  }
+                  if (client.player.fallDistance > 2.0f) {
+                      client.player.fallDistance = 0.0f;
+                      if (client.player.networkHandler != null) {
+                          client.player.networkHandler.sendPacket(new PlayerMoveC2SPacket.OnGroundOnly(true));
+                      }
+                  }
+              }
+          }
+          EOF
+
+          cat << 'EOF' > src/main/java/bench/client/modules/movement/SafeWalk.java
+          package bench.client.modules.movement;
+
+          import bench.client.core.BoolSetting;
+          import bench.client.core.Category;
+          import bench.client.core.Module;
+          import net.minecraft.client.MinecraftClient;
+          import net.minecraft.util.math.BlockPos;
+          import net.minecraft.util.math.Vec3d;
+
+          public class SafeWalk extends Module {
+              public final BoolSetting onlyWhenSneaking = add(new BoolSetting("OnlyWhenSneaking", false));
+
+              public SafeWalk() {
+                  super("SafeWalk", Category.MOVEMENT);
+              }
+
+              @Override
+              public void onTick(MinecraftClient client) {
+                  if (client.player == null || client.world == null || !client.player.isOnGround()) {
+                      return;
+                  }
+                  if (onlyWhenSneaking.getValue() && !client.player.isSneaking()) {
+                      return;
+                  }
+                  Vec3d vel = client.player.getVelocity();
+                  BlockPos nextPos = BlockPos.ofFloored(client.player.getX() + vel.x, client.player.getY() - 0.5, client.player.getZ() + vel.z);
+                  if (client.world.getBlockState(nextPos).isAir()) {
+                      client.player.setVelocity(0.0, vel.y, 0.0);
+                  }
+              }
+          }
+          EOF
+
+          cat << 'EOF' > src/main/java/bench/client/modules/movement/AutoJump.java
+          package bench.client.modules.movement;
+
+          import bench.client.core.Category;
+          import bench.client.core.Module;
+          import net.minecraft.client.MinecraftClient;
+
+          public class AutoJump extends Module {
+              public AutoJump() {
+                  super("AutoJump", Category.MOVEMENT);
+              }
+
+              @Override
+              public void onTick(MinecraftClient client) {
+                  if (client.player == null) {
+                      return;
+                  }
+                  boolean moving = client.player.input.movementForward != 0 || client.player.input.movementSideways != 0;
+                  if (moving && client.player.isOnGround() && !client.player.isSneaking()) {
+                      client.player.jump();
+                  }
+              }
+          }
+          EOF
+
+          cat << 'EOF' > src/main/java/bench/client/modules/render/Xray.java
+          package bench.client.modules.render;
+
+          import bench.client.core.Category;
+          import bench.client.core.Module;
+          import bench.client.core.ModuleManager;
+          import net.minecraft.block.Block;
+          import net.minecraft.block.Blocks;
+          import net.minecraft.client.MinecraftClient;
+
+          import java.util.Set;
+
+          public class Xray extends Module {
+              public static final Set<Block> KEEP = Set.of(
+                      Blocks.COAL_ORE, Blocks.DEEPSLATE_COAL_ORE,
+                      Blocks.IRON_ORE, Blocks.DEEPSLATE_IRON_ORE,
+                      Blocks.GOLD_ORE, Blocks.DEEPSLATE_GOLD_ORE, Blocks.NETHER_GOLD_ORE,
+                      Blocks.DIAMOND_ORE, Blocks.DEEPSLATE_DIAMOND_ORE,
+                      Blocks.EMERALD_ORE, Blocks.DEEPSLATE_EMERALD_ORE,
+                      Blocks.LAPIS_ORE, Blocks.DEEPSLATE_LAPIS_ORE,
+                      Blocks.REDSTONE_ORE, Blocks.DEEPSLATE_REDSTONE_ORE,
+                      Blocks.COPPER_ORE, Blocks.DEEPSLATE_COPPER_ORE,
+                      Blocks.NETHER_QUARTZ_ORE, Blocks.ANCIENT_DEBRIS,
+                      Blocks.CHEST, Blocks.TRAPPED_CHEST, Blocks.ENDER_CHEST,
+                      Blocks.SPAWNER, Blocks.LAVA, Blocks.WATER
+              );
+
+              public Xray() {
+                  super("Xray", Category.RENDER);
+              }
+
+              public static boolean hide(Block block) {
+                  Xray xray = ModuleManager.get(Xray.class);
+                  return xray != null && xray.isEnabled() && !KEEP.contains(block);
+              }
+
+              @Override
+              public void onEnable() {
+                  MinecraftClient client = MinecraftClient.getInstance();
+                  if (client.worldRenderer != null) {
+                      client.worldRenderer.reload();
+                  }
+              }
+
+              @Override
+              public void onDisable() {
+                  MinecraftClient client = MinecraftClient.getInstance();
+                  if (client.worldRenderer != null) {
+                      client.worldRenderer.reload();
+                  }
+              }
+
+              @Override
+              public void onTick(MinecraftClient client) {
+              }
+          }
+          EOF
+
+          cat << 'EOF' > src/main/java/bench/client/modules/render/Fullbright.java
+          package bench.client.modules.render;
+
+          import bench.client.core.Category;
+          import bench.client.core.Module;
+          import net.minecraft.client.MinecraftClient;
+
+          public class Fullbright extends Module {
+              public Fullbright() {
+                  super("Fullbright", Category.RENDER);
+              }
+
+              @Override
+              public void onTick(MinecraftClient client) {
+              }
+          }
+          EOF
+
+          cat << 'EOF' > src/main/java/bench/client/modules/render/ESP.java
+          package bench.client.modules.render;
+
+          import bench.client.core.Category;
+          import bench.client.core.DoubleSetting;
+          import bench.client.core.EnumSetting;
+          import bench.client.core.IntSetting;
+          import bench.client.core.Module;
+          import com.mojang.blaze3d.systems.RenderSystem;
+          import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderContext;
+          import net.minecraft.client.MinecraftClient;
+          import net.minecraft.client.render.RenderLayer;
+          import net.minecraft.client.render.VertexConsumer;
+          import net.minecraft.client.render.VertexConsumerProvider;
+          import net.minecraft.client.render.WorldRenderer;
+          import net.minecraft.client.util.math.MatrixStack;
+          import net.minecraft.entity.player.PlayerEntity;
+          import net.minecraft.util.math.Box;
+          import net.minecraft.util.math.Vec3d;
+
+          public class ESP extends Module {
+              public enum Mode {
+                  BOX,
+                  GLOW
+              }
+
+              public final IntSetting colorHex = add(new IntSetting("ColorRGB", 0x00FFAA, 0x000000, 0xFFFFFF));
+              public final EnumSetting<Mode> mode = add(new EnumSetting<>("Mode", Mode.BOX));
+              public final DoubleSetting range = add(new DoubleSetting("Range", 64.0, 8.0, 256.0));
+
+              public ESP() {
+                  super("ESP", Category.RENDER);
+              }
+
+              @Override
+              public void onTick(MinecraftClient client) {
+              }
+
+              public void onWorldRender(WorldRenderContext context) {
+                  MinecraftClient client = MinecraftClient.getInstance();
+                  if (client.player == null || client.world == null) {
+                      return;
+                  }
+                  MatrixStack matrices = context.matrixStack();
+                  VertexConsumerProvider consumers = context.consumers();
+                  if (matrices == null || consumers == null) {
+                      return;
+                  }
+
+                  Vec3d camPos = context.camera().getPos();
+                  int rgb = colorHex.getValue();
+                  float r = ((rgb >> 16) & 0xFF) / 255.0f;
+                  float g = ((rgb >> 8) & 0xFF) / 255.0f;
+                  float b = (rgb & 0xFF) / 255.0f;
+                  double maxDistSq = range.getValue() * range.getValue();
+
+                  RenderSystem.disableDepthTest();
+                  VertexConsumer lines = consumers.getBuffer(RenderLayer.getLines());
+
+                  for (PlayerEntity target : client.world.getPlayers()) {
+                      if (target == client.player || !target.isAlive()) {
+                          continue;
+                      }
+                      if (client.player.squaredDistanceTo(target) > maxDistSq) {
+                          continue;
+                      }
+                      Box box = target.getBoundingBox().offset(-camPos.x, -camPos.y, -camPos.z);
+                      if (mode.getValue() == Mode.GLOW) {
+                          box = box.expand(0.08);
+                      }
+                      WorldRenderer.drawBox(matrices, lines, box, r, g, b, 1.0f);
+                  }
+                  RenderSystem.enableDepthTest();
+              }
+          }
+          EOF
+
+          cat << 'EOF' > src/main/java/bench/client/modules/render/Tracers.java
+          package bench.client.modules.render;
+
+          import bench.client.core.Category;
+          import bench.client.core.DoubleSetting;
+          import bench.client.core.IntSetting;
+          import bench.client.core.Module;
+          import com.mojang.blaze3d.systems.RenderSystem;
+          import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderContext;
+          import net.minecraft.client.MinecraftClient;
+          import net.minecraft.client.render.RenderLayer;
+          import net.minecraft.client.render.VertexConsumer;
+          import net.minecraft.client.render.VertexConsumerProvider;
+          import net.minecraft.client.util.math.MatrixStack;
+          import net.minecraft.entity.player.PlayerEntity;
+          import net.minecraft.util.math.Vec3d;
+          import org.joml.Matrix4f;
+
+          public class Tracers extends Module {
+              public final IntSetting colorHex = add(new IntSetting("ColorRGB", 0xFF5555, 0x000000, 0xFFFFFF));
+              public final DoubleSetting range = add(new DoubleSetting("Range", 128.0, 16.0, 256.0));
+
+              public Tracers() {
+                  super("Tracers", Category.RENDER);
+              }
+
+              @Override
+              public void onTick(MinecraftClient client) {
+              }
+
+              public void onWorldRender(WorldRenderContext context) {
+                  MinecraftClient client = MinecraftClient.getInstance();
+                  if (client.player == null || client.world == null) {
+                      return;
+                  }
+                  MatrixStack matrices = context.matrixStack();
+                  VertexConsumerProvider consumers = context.consumers();
+                  if (matrices == null || consumers == null) {
+                      return;
+                  }
+
+                  Vec3d camPos = context.camera().getPos();
+                  Vec3d start = Vec3d.fromPolar(context.camera().getPitch(), context.camera().getYaw()).multiply(0.2);
+                  int rgb = colorHex.getValue();
+                  int r = (rgb >> 16) & 0xFF;
+                  int g = (rgb >> 8) & 0xFF;
+                  int b = rgb & 0xFF;
+                  double maxDistSq = range.getValue() * range.getValue();
+
+                  RenderSystem.disableDepthTest();
+                  VertexConsumer lines = consumers.getBuffer(RenderLayer.getLines());
+                  Matrix4f posMat = matrices.peek().getPositionMatrix();
+
+                  for (PlayerEntity target : client.world.getPlayers()) {
+                      if (target == client.player || !target.isAlive()) {
+                          continue;
+                      }
+                      if (client.player.squaredDistanceTo(target) > maxDistSq) {
+                          continue;
+                      }
+                      Vec3d end = target.getPos().add(0, target.getHeight() * 0.5, 0).subtract(camPos);
+                      lines.vertex(posMat, (float) start.x, (float) start.y, (float) start.z).color(r, g, b, 255).normal(0.0f, 1.0f, 0.0f);
+                      lines.vertex(posMat, (float) end.x, (float) end.y, (float) end.z).color(r, g, b, 255).normal(0.0f, 1.0f, 0.0f);
+                  }
+                  RenderSystem.enableDepthTest();
+              }
+          }
+          EOF
+
+          cat << 'EOF' > src/main/java/bench/client/modules/render/Nametags.java
+          package bench.client.modules.render;
+
+          import bench.client.core.Category;
+          import bench.client.core.DoubleSetting;
+          import bench.client.core.Module;
+          import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderContext;
+          import net.minecraft.client.MinecraftClient;
+          import net.minecraft.client.font.TextRenderer;
+          import net.minecraft.client.render.VertexConsumerProvider;
+          import net.minecraft.client.util.math.MatrixStack;
+          import net.minecraft.entity.player.PlayerEntity;
+          import net.minecraft.util.math.Vec3d;
+          import org.joml.Matrix4f;
+
+          import java.util.Locale;
+
+          public class Nametags extends Module {
+              public final DoubleSetting scale = add(new DoubleSetting("Scale", 1.2, 0.5, 3.0));
+              public final DoubleSetting range = add(new DoubleSetting("Range", 64.0, 8.0, 256.0));
+
+              public Nametags() {
+                  super("Nametags", Category.RENDER);
+              }
+
+              @Override
+              public void onTick(MinecraftClient client) {
+              }
+
+              public void onWorldRender(WorldRenderContext context) {
+                  MinecraftClient client = MinecraftClient.getInstance();
+                  if (client.player == null || client.world == null) {
+                      return;
+                  }
+                  MatrixStack matrices = context.matrixStack();
+                  VertexConsumerProvider consumers = context.consumers();
+                  if (matrices == null || consumers == null) {
+                      return;
+                  }
+
+                  Vec3d camPos = context.camera().getPos();
+                  double maxDistSq = range.getValue() * range.getValue();
+                  float s = 0.025f * scale.getValue().floatValue();
+
+                  for (PlayerEntity target : client.world.getPlayers()) {
+                      if (target == client.player || !target.isAlive()) {
+                          continue;
+                      }
+                      if (client.player.squaredDistanceTo(target) > maxDistSq) {
+                          continue;
+                      }
+
+                      Vec3d pos = target.getPos().add(0, target.getHeight() + 0.5, 0).subtract(camPos);
+                      matrices.push();
+                      matrices.translate(pos.x, pos.y, pos.z);
+                      matrices.multiply(context.camera().getRotation());
+                      matrices.scale(s, -s, s);
+
+                      String label = String.format(Locale.ROOT, "%s [%.1f HP]", target.getName().getString(), target.getHealth());
+                      float xOffset = -client.textRenderer.getWidth(label) / 2.0f;
+                      Matrix4f matrix4f = matrices.peek().getPositionMatrix();
+
+                      client.textRenderer.draw(
+                              label,
+                              xOffset,
+                              0.0f,
+                              0xFFFFFFFF,
+                              false,
+                              matrix4f,
+                              consumers,
+                              TextRenderer.TextLayerType.SEE_THROUGH,
+                              0x55000000,
+                              0xF000F0
+                      );
+                      matrices.pop();
+                  }
+              }
+          }
+          EOF
+
+          cat << 'EOF' > src/main/java/bench/client/modules/render/Hud.java
+          package bench.client.modules.render;
+
+          import bench.client.BenchClient;
+          import bench.client.core.BoolSetting;
+          import bench.client.core.Category;
+          import bench.client.core.Module;
+          import bench.client.core.ModuleManager;
+          import net.minecraft.client.MinecraftClient;
+          import net.minecraft.client.gui.DrawContext;
+          import net.minecraft.item.ItemStack;
+          import org.lwjgl.glfw.GLFW;
+
+          import java.util.Locale;
+
+          public class Hud extends Module {
+              public final BoolSetting showFps = add(new BoolSetting("FPS", true));
+              public final BoolSetting showCoords = add(new BoolSetting("Coords", true));
+              public final BoolSetting showSpeed = add(new BoolSetting("Speed", true));
+              public final BoolSetting showArmor = add(new BoolSetting("Armor", true));
+              public final BoolSetting showArrayList = add(new BoolSetting("ActiveList", true));
+
+              public Hud() {
+                  super("Hud", Category.RENDER, GLFW.GLFW_KEY_H);
+                  setEnabled(true);
+              }
+
+              @Override
+              public void onTick(MinecraftClient client) {
+              }
+
+              public void renderHud(DrawContext context) {
+                  if (!isEnabled()) {
+                      return;
+                  }
+                  MinecraftClient client = MinecraftClient.getInstance();
+                  if (client.player == null || client.getDebugHud().shouldShowDebugHud()) {
+                      return;
+                  }
+
+                  int y = 6;
+                  context.drawTextWithShadow(client.textRenderer, "BenchClient 1.21.11", 6, y, 0xFF55AAFF);
+                  y += 12;
+
+                  if (showFps.getValue()) {
+                      context.drawTextWithShadow(client.textRenderer, "FPS: " + client.getCurrentFps(), 6, y, 0xFFFFFF);
+                      y += 10;
+                  }
+
+                  if (showCoords.getValue()) {
+                      String coords = String.format(
+                              Locale.ROOT,
+                              "XYZ: %.1f, %.1f, %.1f",
+                              client.player.getX(),
+                              client.player.getY(),
+                              client.player.getZ()
+                      );
+                      context.drawTextWithShadow(client.textRenderer, coords, 6, y, 0xFFFFFF);
+                      y += 10;
+                  }
+
+                  if (showSpeed.getValue()) {
+                      double dx = client.player.getX() - client.player.prevX;
+                      double dz = client.player.getZ() - client.player.prevZ;
+                      double bps = Math.hypot(dx, dz) * 20.0;
+                      context.drawTextWithShadow(client.textRenderer, String.format(Locale.ROOT, "Speed: %.2f b/s", bps), 6, y, 0xFFFFFF);
+                      y += 10;
+                  }
+
+                  if (showArmor.getValue()) {
+                      for (ItemStack armor : client.player.getInventory().armor) {
+                          if (!armor.isEmpty() && armor.isDamageable()) {
+                              int remaining = armor.getMaxDamage() - armor.getDamage();
+                              String txt = armor.getName().getString() + ": " + remaining + "/" + armor.getMaxDamage();
+                              context.drawTextWithShadow(client.textRenderer, txt, 6, y, 0xAAAAAA);
+                              y += 10;
+                          }
+                      }
+                  }
+
+                  if (showArrayList.getValue()) {
+                      int rightX = context.getScaledWindowWidth() - 6;
+                      int modY = 6;
+                      for (Module mod : ModuleManager.all()) {
+                          if (mod.isEnabled()) {
+                              int w = client.textRenderer.getWidth(mod.getName());
+                              context.drawTextWithShadow(client.textRenderer, mod.getName(), rightX - w, modY, 0xFF55FFAA);
+                              modY += 10;
+                          }
+                      }
+                  }
+              }
+          }
+          EOF
+
+          cat << 'EOF' > src/main/java/bench/client/modules/player/AutoTool.java
+          package bench.client.modules.player;
+
+          import bench.client.core.Category;
+          import bench.client.core.Module;
+          import net.minecraft.block.BlockState;
+          import net.minecraft.client.MinecraftClient;
+          import net.minecraft.item.ItemStack;
+          import net.minecraft.util.hit.BlockHitResult;
+          import net.minecraft.util.hit.HitResult;
+
+          public class AutoTool extends Module {
+              public AutoTool() {
+                  super("AutoTool", Category.PLAYER);
+              }
+
+              @Override
+              public void onTick(MinecraftClient client) {
+                  if (client.player == null || client.world == null) {
+                      return;
+                  }
+                  if (!client.options.attackKey.isPressed()) {
+                      return;
+                  }
+                  HitResult hit = client.crosshairTarget;
+                  if (!(hit instanceof BlockHitResult blockHit) || hit.getType() != HitResult.Type.BLOCK) {
+                      return;
+                  }
+                  BlockState state = client.world.getBlockState(blockHit.getBlockPos());
+                  if (state.isAir()) {
+                      return;
+                  }
+
+                  int bestSlot = -1;
+                  float bestSpeed = 1.0f;
+                  for (int i = 0; i < 9; i++) {
+                      ItemStack stack = client.player.getInventory().getStack(i);
+                      float speed = stack.getMiningSpeedMultiplier(state);
+                      if (speed > bestSpeed) {
+                          bestSpeed = speed;
+                          bestSlot = i;
+                      }
+                  }
+
+                  if (bestSlot != -1) {
+                      client.player.getInventory().setSelectedSlot(bestSlot);
+                  }
+              }
+          }
+          EOF
+
+          cat << 'EOF' > src/main/java/bench/client/modules/player/FastPlace.java
+          package bench.client.modules.player;
+
+          import bench.client.core.Category;
+          import bench.client.core.IntSetting;
+          import bench.client.core.Module;
+          import net.minecraft.client.MinecraftClient;
+
+          public class FastPlace extends Module {
+              public final IntSetting cooldown = add(new IntSetting("Cooldown", 0, 0, 4));
+
+              public FastPlace() {
+                  super("FastPlace", Category.PLAYER);
+              }
+
+              @Override
+              public void onTick(MinecraftClient client) {
+              }
+          }
+          EOF
+
+          cat << 'EOF' > src/main/java/bench/client/modules/player/FastBreak.java
+          package bench.client.modules.player;
+
+          import bench.client.core.Category;
+          import bench.client.core.DoubleSetting;
+          import bench.client.core.Module;
+          import net.minecraft.client.MinecraftClient;
+
+          public class FastBreak extends Module {
+              public final DoubleSetting multiplier = add(new DoubleSetting("Multiplier", 1.5, 1.0, 3.0));
+
+              public FastBreak() {
+                  super("FastBreak", Category.PLAYER);
+              }
+
+              @Override
+              public void onTick(MinecraftClient client) {
+              }
+          }
+          EOF
+
+          cat << 'EOF' > src/main/java/bench/client/modules/misc/Timer.java
+          package bench.client.modules.misc;
+
+          import bench.client.core.Category;
+          import bench.client.core.DoubleSetting;
+          import bench.client.core.Module;
+          import net.minecraft.client.MinecraftClient;
+
+          public class Timer extends Module {
+              public final DoubleSetting speed = add(new DoubleSetting("Speed", 1.2, 0.5, 2.0));
+
+              public Timer() {
+                  super("Timer", Category.MISC);
+              }
+
+              @Override
+              public void onTick(MinecraftClient client) {
+              }
+          }
+          EOF
+
+          cat << 'EOF' > src/main/java/bench/client/modules/misc/AntiAFK.java
+          package bench.client.modules.misc;
+
+          import bench.client.core.Category;
+          import bench.client.core.EnumSetting;
+          import bench.client.core.IntSetting;
+          import bench.client.core.Module;
+          import net.minecraft.client.MinecraftClient;
+
+          public class AntiAFK extends Module {
+              public enum Mode {
+                  ROTATE,
+                  SNEAK,
+                  BOTH
+              }
+
+              public final IntSetting interval = add(new IntSetting("Interval", 60, 10, 200));
+              public final EnumSetting<Mode> mode = add(new EnumSetting<>("Mode", Mode.BOTH));
+
+              private int ticks = 0;
+
+              public AntiAFK() {
+                  super("AntiAFK", Category.MISC);
+              }
+
+              @Override
+              public void onTick(MinecraftClient client) {
+                  if (client.player == null) {
+                      return;
+                  }
+                  ticks++;
+                  if (ticks >= interval.getValue()) {
+                      ticks = 0;
+                      Mode m = mode.getValue();
+                      if (m == Mode.ROTATE || m == Mode.BOTH) {
+                          client.player.setYaw(client.player.getYaw() + 25.0f);
+                      }
+                      if (m == Mode.SNEAK || m == Mode.BOTH) {
+                          client.options.sneakKey.setPressed(!client.options.sneakKey.isPressed());
+                      }
+                  }
+              }
+
+              @Override
+              public void onDisable() {
+                  MinecraftClient client = MinecraftClient.getInstance();
+                  if (client.options != null) {
+                      client.options.sneakKey.setPressed(false);
+                  }
+              }
+          }
+          EOF
+
+          cat << 'EOF' > src/main/java/bench/client/modules/misc/ChatSuffix.java
+          package bench.client.modules.misc;
+
+          import bench.client.core.Category;
+          import bench.client.core.Module;
+          import net.minecraft.client.MinecraftClient;
+
+          public class ChatSuffix extends Module {
+              private static final String SUFFIX = " | BenchClient";
+
+              public ChatSuffix() {
+                  super("ChatSuffix", Category.MISC);
+              }
+
+              @Override
+              public void onTick(MinecraftClient client) {
+              }
+
+              public String modifyMessage(String message) {
+                  if (!isEnabled() || message.startsWith("/") || message.endsWith(SUFFIX)) {
+                      return message;
+                  }
+                  return message + SUFFIX;
+              }
+          }
+          EOF
+
+          cat << 'EOF' > src/main/java/bench/client/mixin/BlockRenderMixin.java
+          package bench.client.mixin;
+
+          import bench.client.modules.render.Xray;
+          import net.minecraft.block.BlockState;
+          import net.minecraft.client.render.VertexConsumer;
+          import net.minecraft.client.render.block.BlockRenderManager;
+          import net.minecraft.client.render.model.BlockModelPart;
+          import net.minecraft.client.util.math.MatrixStack;
+          import net.minecraft.util.math.BlockPos;
+          import net.minecraft.world.BlockRenderView;
+          import org.spongepowered.asm.mixin.Mixin;
+          import org.spongepowered.asm.mixin.injection.At;
+          import org.spongepowered.asm.mixin.injection.Inject;
+          import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+
+          import java.util.List;
+
+          @Mixin(BlockRenderManager.class)
+          public class BlockRenderMixin {
+              @Inject(
+                      method = "renderBlock",
+                      at = @At("HEAD"),
+                      cancellable = true
+              )
+              private void onRenderBlock(
+                      BlockState state,
+                      BlockPos pos,
+                      BlockRenderView world,
+                      MatrixStack matrices,
+                      VertexConsumer vertexConsumer,
+                      boolean cull,
+                      List<BlockModelPart> parts,
+                      CallbackInfo ci
+              ) {
+                  if (Xray.hide(state.getBlock())) {
+                      ci.cancel();
+                  }
+              }
+          }
+          EOF
+
+          cat << 'EOF' > src/main/java/bench/client/mixin/PlayerEntityMixin.java
+          package bench.client.mixin;
+
+          import bench.client.core.ModuleManager;
+          import bench.client.modules.combat.Reach;
+          import net.minecraft.entity.player.PlayerEntity;
+          import org.spongepowered.asm.mixin.Mixin;
+          import org.spongepowered.asm.mixin.injection.At;
+          import org.spongepowered.asm.mixin.injection.Inject;
+          import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
+
+          @Mixin(PlayerEntity.class)
+          public class PlayerEntityMixin {
+              @Inject(method = "getEntityInteractionRange", at = @At("RETURN"), cancellable = true)
+              private void onGetEntityInteractionRange(CallbackInfoReturnable<Double> cir) {
+                  Reach reach = ModuleManager.get(Reach.class);
+                  if (reach != null && reach.isEnabled()) {
+                      cir.setReturnValue(reach.range.getValue());
+                  }
+              }
+          }
+          EOF
+
+          cat << 'EOF' > src/main/java/bench/client/mixin/ClientPlayerEntityMixin.java
+          package bench.client.mixin;
+
+          import bench.client.core.ModuleManager;
+          import bench.client.modules.combat.Velocity;
+          import net.minecraft.client.network.ClientPlayerEntity;
+          import org.spongepowered.asm.mixin.Mixin;
+          import org.spongepowered.asm.mixin.injection.At;
+          import org.spongepowered.asm.mixin.injection.Inject;
+          import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+
+          @Mixin(ClientPlayerEntity.class)
+          public abstract class ClientPlayerEntityMixin {
+              @Inject(method = "setVelocityClient", at = @At("HEAD"), cancellable = true)
+              private void onSetVelocityClient(double x, double y, double z, CallbackInfo ci) {
+                  Velocity velocity = ModuleManager.get(Velocity.class);
+                  if (velocity != null && velocity.isEnabled()) {
+                      ClientPlayerEntity player = (ClientPlayerEntity) (Object) this;
+                      double h = velocity.horizontal.getValue();
+                      double v = velocity.vertical.getValue();
+                      player.setVelocity(x * h, y * v, z * h);
+                      player.velocityDirty = true;
+                      ci.cancel();
+                  }
+              }
+          }
+          EOF
+
+          cat << 'EOF' > src/main/java/bench/client/mixin/EntityStepMixin.java
+          package bench.client.mixin;
+
+          import bench.client.core.ModuleManager;
+          import bench.client.modules.movement.Step;
+          import net.minecraft.client.MinecraftClient;
+          import net.minecraft.entity.Entity;
+          import org.spongepowered.asm.mixin.Mixin;
+          import org.spongepowered.asm.mixin.injection.At;
+          import org.spongepowered.asm.mixin.injection.Inject;
+          import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
+
+          @Mixin(Entity.class)
+          public class EntityStepMixin {
+              @Inject(method = "getStepHeight", at = @At("RETURN"), cancellable = true)
+              private void onGetStepHeight(CallbackInfoReturnable<Float> cir) {
+                  MinecraftClient client = MinecraftClient.getInstance();
+                  if (client != null && (Object) this == client.player) {
+                      Step step = ModuleManager.get(Step.class);
+                      if (step != null && step.isEnabled()) {
+                          cir.setReturnValue(step.height.getValue().floatValue());
+                      }
+                  }
+              }
+          }
+          EOF
+
+          cat << 'EOF' > src/main/java/bench/client/mixin/GameRendererMixin.java
+          package bench.client.mixin;
+
+          import bench.client.core.ModuleManager;
+          import bench.client.modules.render.Fullbright;
+          import net.minecraft.client.render.GameRenderer;
+          import net.minecraft.entity.LivingEntity;
+          import org.spongepowered.asm.mixin.Mixin;
+          import org.spongepowered.asm.mixin.injection.At;
+          import org.spongepowered.asm.mixin.injection.Inject;
+          import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
+
+          @Mixin(GameRenderer.class)
+          public class GameRendererMixin {
+              @Inject(method = "getNightVisionStrength", at = @At("HEAD"), cancellable = true)
+              private static void onGetNightVisionStrength(LivingEntity entity, float tickDelta, CallbackInfoReturnable<Float> cir) {
+                  Fullbright fb = ModuleManager.get(Fullbright.class);
+                  if (fb != null && fb.isEnabled()) {
+                      cir.setReturnValue(1.0f);
+                  }
+              }
+          }
+          EOF
+
+          cat << 'EOF' > src/main/java/bench/client/mixin/MinecraftClientMixin.java
+          package bench.client.mixin;
+
+          import bench.client.core.ModuleManager;
+          import bench.client.modules.misc.Timer;
+          import bench.client.modules.player.FastPlace;
+          import net.minecraft.client.MinecraftClient;
+          import org.spongepowered.asm.mixin.Mixin;
+          import org.spongepowered.asm.mixin.Shadow;
+          import org.spongepowered.asm.mixin.Unique;
+          import org.spongepowered.asm.mixin.injection.At;
+          import org.spongepowered.asm.mixin.injection.Inject;
+          import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+
+          @Mixin(MinecraftClient.class)
+          public abstract class MinecraftClientMixin {
+              @Shadow
+              private int itemUseCooldown;
+
+              @Shadow
+              public abstract void tick();
+
+              @Unique
+              private double benchTimerAccumulator = 0.0;
+
+              @Unique
+              private boolean benchInExtraTick = false;
+
+              @Inject(method = "tick", at = @At("HEAD"))
+              private void onTickHead(CallbackInfo ci) {
+                  FastPlace fastPlace = ModuleManager.get(FastPlace.class);
+                  if (fastPlace != null && fastPlace.isEnabled()) {
+                      int max = fastPlace.cooldown.getValue();
+                      if (this.itemUseCooldown > max) {
+                          this.itemUseCooldown = max;
+                      }
+                  }
+
+                  if (!benchInExtraTick) {
+                      Timer timer = ModuleManager.get(Timer.class);
+                      if (timer != null && timer.isEnabled()) {
+                          double extra = timer.speed.getValue() - 1.0;
+                          if (extra > 0.0) {
+                              benchTimerAccumulator += extra;
+                              if (benchTimerAccumulator >= 1.0) {
+                                  benchTimerAccumulator -= 1.0;
+                                  benchInExtraTick = true;
+                                  try {
+                                      this.tick();
+                                  } finally {
+                                      benchInExtraTick = false;
+                                  }
+                              }
+                          }
+                      }
+                  }
+              }
+          }
+          EOF
+
+          cat << 'EOF' > src/main/java/bench/client/mixin/ClientPlayerInteractionManagerMixin.java
+          package bench.client.mixin;
+
+          import bench.client.core.ModuleManager;
+          import bench.client.modules.player.FastBreak;
+          import net.minecraft.client.network.ClientPlayerInteractionManager;
+          import net.minecraft.util.math.BlockPos;
+          import net.minecraft.util.math.Direction;
+          import org.spongepowered.asm.mixin.Mixin;
+          import org.spongepowered.asm.mixin.Shadow;
+          import org.spongepowered.asm.mixin.injection.At;
+          import org.spongepowered.asm.mixin.injection.Inject;
+          import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
+
+          @Mixin(ClientPlayerInteractionManager.class)
+          public class ClientPlayerInteractionManagerMixin {
+              @Shadow
+              private int blockBreakingCooldown;
+
+              @Shadow
+              private float currentBreakingProgress;
+
+              @Inject(method = "updateBlockBreakingProgress", at = @At("HEAD"))
+              private void onUpdateBlockBreakingProgress(BlockPos pos, Direction direction, CallbackInfoReturnable<Boolean> cir) {
+                  FastBreak fastBreak = ModuleManager.get(FastBreak.class);
+                  if (fastBreak != null && fastBreak.isEnabled()) {
+                      this.blockBreakingCooldown = 0;
+                      double mult = fastBreak.multiplier.getValue();
+                      if (mult > 1.0 && this.currentBreakingProgress > 0.0f) {
+                          this.currentBreakingProgress = Math.min(1.0f, this.currentBreakingProgress + (float) ((mult - 1.0) * 0.03));
+                      }
+                  }
+              }
+          }
+          EOF
+
+          # Remove leading spaces added by the YAML block
+          for f in settings.gradle gradle.properties build.gradle src/main/resources/fabric.mod.json src/main/resources/benchclient.mixins.json src/main/resources/assets/benchclient/lang/en_us.json $(find src -name "*.java"); do
+            sed -i 's/^          //' "$f"
+          done
+
+          zip -r benchclient-src.zip settings.gradle gradle.properties build.gradle src/
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+
+      - name: Setup Gradle 9.2.1
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.2.1'
+
+      - name: Build Mod with Gradle
+        run: |
+          gradle build
+          cp build/libs/benchclient-1.0.0.jar benchclient-1.21.11.jar
+
+      - name: Upload benchclient-1.21.11.jar and Source ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchclient-1.21.11-release
+          path: |
+            benchclient-1.21.11.jar
+            build/libs/*.jar
+            !build/libs/*-sources.jar
+            benchclient-src.zip
