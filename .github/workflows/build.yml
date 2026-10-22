@@ -158,17 +158,35 @@ jobs:
           import bench.client.core.ModuleManager;
           import bench.client.core.SettingManager;
           import bench.client.gui.ClickGui;
-          import bench.client.modules.combat.*;
-          import bench.client.modules.misc.*;
-          import bench.client.modules.movement.*;
-          import bench.client.modules.player.*;
-          import bench.client.modules.render.*;
+          import bench.client.modules.combat.AutoTotem;
+          import bench.client.modules.combat.Criticals;
+          import bench.client.modules.combat.KillAura;
+          import bench.client.modules.combat.Reach;
+          import bench.client.modules.combat.Velocity;
+          import bench.client.modules.misc.AntiAFK;
+          import bench.client.modules.misc.ChatSuffix;
+          import bench.client.modules.misc.Timer;
+          import bench.client.modules.movement.AutoJump;
+          import bench.client.modules.movement.Fly;
+          import bench.client.modules.movement.NoFall;
+          import bench.client.modules.movement.SafeWalk;
+          import bench.client.modules.movement.Speed;
+          import bench.client.modules.movement.Sprint;
+          import bench.client.modules.movement.Step;
+          import bench.client.modules.player.AutoTool;
+          import bench.client.modules.player.FastBreak;
+          import bench.client.modules.player.FastPlace;
+          import bench.client.modules.render.ESP;
+          import bench.client.modules.render.Fullbright;
+          import bench.client.modules.render.Hud;
+          import bench.client.modules.render.Nametags;
+          import bench.client.modules.render.Tracers;
+          import bench.client.modules.render.Xray;
           import net.fabricmc.api.ClientModInitializer;
           import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
           import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
           import net.fabricmc.fabric.api.client.message.v1.ClientSendMessageEvents;
           import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
-          import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderEvents;
           import net.minecraft.client.option.KeyBinding;
           import net.minecraft.client.util.InputUtil;
           import net.minecraft.util.Identifier;
@@ -183,6 +201,7 @@ jobs:
               private static KeyBinding cycleModuleKey;
 
               @Override
+              @SuppressWarnings("deprecation")
               public void onInitializeClient() {
                   ModuleManager.register(new KillAura());
                   ModuleManager.register(new Criticals());
@@ -234,18 +253,17 @@ jobs:
                           KEY_CATEGORY
                   ));
 
-                  HudRenderCallback.EVENT.register((drawContext, renderTickCounter) -> hud.renderHud(drawContext));
-
-                  WorldRenderEvents.LAST.register(context -> {
+                  HudRenderCallback.EVENT.register((drawContext, renderTickCounter) -> {
                       if (esp.isEnabled()) {
-                          esp.onWorldRender(context);
+                          esp.renderOverlay(drawContext);
                       }
                       if (tracers.isEnabled()) {
-                          tracers.onWorldRender(context);
+                          tracers.renderOverlay(drawContext);
                       }
                       if (nametags.isEnabled()) {
-                          nametags.onWorldRender(context);
+                          nametags.renderOverlay(drawContext);
                       }
+                      hud.renderHud(drawContext);
                   });
 
                   ClientSendMessageEvents.MODIFY_CHAT.register(chatSuffix::modifyMessage);
@@ -264,7 +282,7 @@ jobs:
                       if (client.player != null && client.world != null) {
                           for (Module m : ModuleManager.all()) {
                               if (m.getKeyBind() != GLFW.GLFW_KEY_UNKNOWN
-                                      && InputUtil.isKeyPressed(client.getWindow().getHandle(), m.getKeyBind())
+                                      && InputUtil.isKeyPressed(client.getWindow(), m.getKeyBind())
                                       && client.currentScreen == null) {
                                   if (!m.wasKeyPressedLastTick()) {
                                       m.setKeyPressedLastTick(true);
@@ -593,7 +611,11 @@ jobs:
           cat << 'EOF' > src/main/java/bench/client/core/SettingManager.java
           package bench.client.core;
 
-          import com.google.gson.*;
+          import com.google.gson.Gson;
+          import com.google.gson.GsonBuilder;
+          import com.google.gson.JsonElement;
+          import com.google.gson.JsonObject;
+          import com.google.gson.JsonParser;
           import net.fabricmc.loader.api.FabricLoader;
 
           import java.io.IOException;
@@ -697,7 +719,16 @@ jobs:
           cat << 'EOF' > src/main/java/bench/client/gui/ClickGui.java
           package bench.client.gui;
 
-          import bench.client.core.*;
+          import bench.client.core.BoolSetting;
+          import bench.client.core.Category;
+          import bench.client.core.DoubleSetting;
+          import bench.client.core.EnumSetting;
+          import bench.client.core.IntSetting;
+          import bench.client.core.Module;
+          import bench.client.core.ModuleManager;
+          import bench.client.core.Setting;
+          import bench.client.core.SettingManager;
+          import net.minecraft.client.gui.Click;
           import net.minecraft.client.gui.DrawContext;
           import net.minecraft.client.gui.screen.Screen;
           import net.minecraft.text.Text;
@@ -791,7 +822,11 @@ jobs:
               }
 
               @Override
-              public boolean mouseClicked(double mouseX, double mouseY, int button) {
+              public boolean mouseClicked(Click click, boolean bl) {
+                  double mouseX = click.x();
+                  double mouseY = click.y();
+                  int button = click.button();
+
                   int tabWidth = panelWidth / Category.values().length;
                   if (mouseX >= panelX && mouseX <= panelX + panelWidth && mouseY >= panelY && mouseY <= panelY + headerHeight) {
                       if (button == 0) {
@@ -846,11 +881,13 @@ jobs:
                       }
                   }
 
-                  return super.mouseClicked(mouseX, mouseY, button);
+                  return super.mouseClicked(click, bl);
               }
 
               @Override
-              public boolean mouseDragged(double mouseX, double mouseY, int button, double deltaX, double deltaY) {
+              public boolean mouseDragged(Click click, double deltaX, double deltaY) {
+                  double mouseX = click.x();
+                  double mouseY = click.y();
                   if (draggingPanel) {
                       panelX = (int) mouseX - dragOffsetX;
                       panelY = (int) mouseY - dragOffsetY;
@@ -862,15 +899,15 @@ jobs:
                       updateSliderValue(draggingSlider, mouseX, settingsX, settingsWidth);
                       return true;
                   }
-                  return super.mouseDragged(mouseX, mouseY, button, deltaX, deltaY);
+                  return super.mouseDragged(click, deltaX, deltaY);
               }
 
               @Override
-              public boolean mouseReleased(double mouseX, double mouseY, int button) {
+              public boolean mouseReleased(Click click) {
                   draggingPanel = false;
                   draggingSlider = null;
                   SettingManager.save();
-                  return super.mouseReleased(mouseX, mouseY, button);
+                  return super.mouseReleased(click);
               }
 
               private void updateSliderValue(Setting<?> setting, double mouseX, int x, int width) {
@@ -895,7 +932,12 @@ jobs:
           cat << 'EOF' > src/main/java/bench/client/modules/combat/KillAura.java
           package bench.client.modules.combat;
 
-          import bench.client.core.*;
+          import bench.client.core.BoolSetting;
+          import bench.client.core.Category;
+          import bench.client.core.DoubleSetting;
+          import bench.client.core.IntSetting;
+          import bench.client.core.Module;
+          import bench.client.core.ModuleManager;
           import net.minecraft.client.MinecraftClient;
           import net.minecraft.command.argument.EntityAnchorArgumentType;
           import net.minecraft.entity.Entity;
@@ -1126,6 +1168,7 @@ jobs:
           import bench.client.core.DoubleSetting;
           import bench.client.core.Module;
           import net.minecraft.client.MinecraftClient;
+          import net.minecraft.util.math.Vec2f;
           import net.minecraft.util.math.Vec3d;
 
           public class Speed extends Module {
@@ -1140,7 +1183,8 @@ jobs:
                   if (client.player == null || !client.player.isOnGround()) {
                       return;
                   }
-                  if (client.player.input.movementForward == 0 && client.player.input.movementSideways == 0) {
+                  Vec2f move = client.player.input.getMovementInput();
+                  if (move.x == 0.0f && move.y == 0.0f) {
                       return;
                   }
                   Vec3d vel = client.player.getVelocity();
@@ -1157,6 +1201,7 @@ jobs:
           import bench.client.core.Category;
           import bench.client.core.Module;
           import net.minecraft.client.MinecraftClient;
+          import net.minecraft.util.math.Vec2f;
 
           public class Sprint extends Module {
               public final BoolSetting omniSprint = add(new BoolSetting("OmniSprint", false));
@@ -1170,9 +1215,10 @@ jobs:
                   if (client.player == null) {
                       return;
                   }
+                  Vec2f move = client.player.input.getMovementInput();
                   boolean moving = omniSprint.getValue()
-                          ? (client.player.input.movementForward != 0 || client.player.input.movementSideways != 0)
-                          : (client.player.input.movementForward > 0);
+                          ? (move.x != 0.0f || move.y != 0.0f)
+                          : (move.y > 0.0f);
                   if (moving && !client.player.isSneaking() && !client.player.horizontalCollision) {
                       client.player.setSprinting(true);
                   }
@@ -1222,7 +1268,9 @@ jobs:
                   if (client.player.fallDistance > 2.0f) {
                       client.player.fallDistance = 0.0f;
                       if (client.player.networkHandler != null) {
-                          client.player.networkHandler.sendPacket(new PlayerMoveC2SPacket.OnGroundOnly(true));
+                          client.player.networkHandler.sendPacket(
+                                  new PlayerMoveC2SPacket.OnGroundOnly(true, client.player.horizontalCollision)
+                          );
                       }
                   }
               }
@@ -1269,6 +1317,7 @@ jobs:
           import bench.client.core.Category;
           import bench.client.core.Module;
           import net.minecraft.client.MinecraftClient;
+          import net.minecraft.util.math.Vec2f;
 
           public class AutoJump extends Module {
               public AutoJump() {
@@ -1280,7 +1329,8 @@ jobs:
                   if (client.player == null) {
                       return;
                   }
-                  boolean moving = client.player.input.movementForward != 0 || client.player.input.movementSideways != 0;
+                  Vec2f move = client.player.input.getMovementInput();
+                  boolean moving = move.x != 0.0f || move.y != 0.0f;
                   if (moving && client.player.isOnGround() && !client.player.isSneaking()) {
                       client.player.jump();
                   }
@@ -1372,17 +1422,13 @@ jobs:
           import bench.client.core.EnumSetting;
           import bench.client.core.IntSetting;
           import bench.client.core.Module;
-          import com.mojang.blaze3d.systems.RenderSystem;
-          import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderContext;
           import net.minecraft.client.MinecraftClient;
-          import net.minecraft.client.render.RenderLayer;
-          import net.minecraft.client.render.VertexConsumer;
-          import net.minecraft.client.render.VertexConsumerProvider;
-          import net.minecraft.client.render.WorldRenderer;
-          import net.minecraft.client.util.math.MatrixStack;
+          import net.minecraft.client.gui.DrawContext;
+          import net.minecraft.client.render.Camera;
           import net.minecraft.entity.player.PlayerEntity;
-          import net.minecraft.util.math.Box;
           import net.minecraft.util.math.Vec3d;
+          import org.joml.Quaternionf;
+          import org.joml.Vector3f;
 
           public class ESP extends Module {
               public enum Mode {
@@ -1402,41 +1448,61 @@ jobs:
               public void onTick(MinecraftClient client) {
               }
 
-              public void onWorldRender(WorldRenderContext context) {
+              public void renderOverlay(DrawContext context) {
                   MinecraftClient client = MinecraftClient.getInstance();
-                  if (client.player == null || client.world == null) {
+                  if (client.player == null || client.world == null || client.gameRenderer == null) {
                       return;
                   }
-                  MatrixStack matrices = context.matrixStack();
-                  VertexConsumerProvider consumers = context.consumers();
-                  if (matrices == null || consumers == null) {
-                      return;
-                  }
+                  Camera camera = client.gameRenderer.getCamera();
+                  Vec3d camPos = camera.getPos();
+                  Quaternionf invRot = new Quaternionf(camera.getRotation()).conjugate();
 
-                  Vec3d camPos = context.camera().getPos();
-                  int rgb = colorHex.getValue();
-                  float r = ((rgb >> 16) & 0xFF) / 255.0f;
-                  float g = ((rgb >> 8) & 0xFF) / 255.0f;
-                  float b = (rgb & 0xFF) / 255.0f;
+                  int sw = context.getScaledWindowWidth();
+                  int sh = context.getScaledWindowHeight();
+                  double fov = client.options.getFov().getValue();
+                  double f = (sh / 2.0) / Math.tan(Math.toRadians(fov / 2.0));
+
+                  int color = 0xFF000000 | (colorHex.getValue() & 0xFFFFFF);
                   double maxDistSq = range.getValue() * range.getValue();
-
-                  RenderSystem.disableDepthTest();
-                  VertexConsumer lines = consumers.getBuffer(RenderLayer.getLines());
 
                   for (PlayerEntity target : client.world.getPlayers()) {
                       if (target == client.player || !target.isAlive()) {
                           continue;
                       }
-                      if (client.player.squaredDistanceTo(target) > maxDistSq) {
+                      double distSq = client.player.squaredDistanceTo(target);
+                      if (distSq > maxDistSq) {
                           continue;
                       }
-                      Box box = target.getBoundingBox().offset(-camPos.x, -camPos.y, -camPos.z);
-                      if (mode.getValue() == Mode.GLOW) {
-                          box = box.expand(0.08);
+
+                      Vec3d rel = new Vec3d(
+                              target.getX() - camPos.x,
+                              target.getY() + target.getHeight() * 0.5 - camPos.y,
+                              target.getZ() - camPos.z
+                      );
+                      Vector3f v = new Vector3f((float) rel.x, (float) rel.y, (float) rel.z).rotate(invRot);
+                      if (v.z >= -0.1f) {
+                          continue;
                       }
-                      WorldRenderer.drawBox(matrices, lines, box, r, g, b, 1.0f);
+
+                      double depth = -v.z;
+                      int cx = (int) (sw / 2.0 + (v.x / depth) * f);
+                      int cy = (int) (sh / 2.0 - (v.y / depth) * f);
+                      int boxH = Math.max(8, (int) ((target.getHeight() / depth) * f));
+                      int boxW = Math.max(6, boxH / 2);
+
+                      int x1 = cx - boxW / 2;
+                      int y1 = cy - boxH / 2;
+                      int x2 = cx + boxW / 2;
+                      int y2 = cy + boxH / 2;
+
+                      if (mode.getValue() == Mode.GLOW) {
+                          context.fill(x1 - 1, y1 - 1, x2 + 1, y2 + 1, 0x4400FFAA);
+                      }
+                      context.fill(x1, y1, x2, y1 + 1, color);
+                      context.fill(x1, y2 - 1, x2, y2, color);
+                      context.fill(x1, y1, x1 + 1, y2, color);
+                      context.fill(x2 - 1, y1, x2, y2, color);
                   }
-                  RenderSystem.enableDepthTest();
               }
           }
           EOF
@@ -1448,16 +1514,13 @@ jobs:
           import bench.client.core.DoubleSetting;
           import bench.client.core.IntSetting;
           import bench.client.core.Module;
-          import com.mojang.blaze3d.systems.RenderSystem;
-          import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderContext;
           import net.minecraft.client.MinecraftClient;
-          import net.minecraft.client.render.RenderLayer;
-          import net.minecraft.client.render.VertexConsumer;
-          import net.minecraft.client.render.VertexConsumerProvider;
-          import net.minecraft.client.util.math.MatrixStack;
+          import net.minecraft.client.gui.DrawContext;
+          import net.minecraft.client.render.Camera;
           import net.minecraft.entity.player.PlayerEntity;
           import net.minecraft.util.math.Vec3d;
-          import org.joml.Matrix4f;
+          import org.joml.Quaternionf;
+          import org.joml.Vector3f;
 
           public class Tracers extends Module {
               public final IntSetting colorHex = add(new IntSetting("ColorRGB", 0xFF5555, 0x000000, 0xFFFFFF));
@@ -1471,28 +1534,24 @@ jobs:
               public void onTick(MinecraftClient client) {
               }
 
-              public void onWorldRender(WorldRenderContext context) {
+              public void renderOverlay(DrawContext context) {
                   MinecraftClient client = MinecraftClient.getInstance();
-                  if (client.player == null || client.world == null) {
+                  if (client.player == null || client.world == null || client.gameRenderer == null) {
                       return;
                   }
-                  MatrixStack matrices = context.matrixStack();
-                  VertexConsumerProvider consumers = context.consumers();
-                  if (matrices == null || consumers == null) {
-                      return;
-                  }
+                  Camera camera = client.gameRenderer.getCamera();
+                  Vec3d camPos = camera.getPos();
+                  Quaternionf invRot = new Quaternionf(camera.getRotation()).conjugate();
 
-                  Vec3d camPos = context.camera().getPos();
-                  Vec3d start = Vec3d.fromPolar(context.camera().getPitch(), context.camera().getYaw()).multiply(0.2);
-                  int rgb = colorHex.getValue();
-                  int r = (rgb >> 16) & 0xFF;
-                  int g = (rgb >> 8) & 0xFF;
-                  int b = rgb & 0xFF;
+                  int sw = context.getScaledWindowWidth();
+                  int sh = context.getScaledWindowHeight();
+                  double fov = client.options.getFov().getValue();
+                  double f = (sh / 2.0) / Math.tan(Math.toRadians(fov / 2.0));
+
+                  int color = 0xFF000000 | (colorHex.getValue() & 0xFFFFFF);
                   double maxDistSq = range.getValue() * range.getValue();
-
-                  RenderSystem.disableDepthTest();
-                  VertexConsumer lines = consumers.getBuffer(RenderLayer.getLines());
-                  Matrix4f posMat = matrices.peek().getPositionMatrix();
+                  int startX = sw / 2;
+                  int startY = sh / 2;
 
                   for (PlayerEntity target : client.world.getPlayers()) {
                       if (target == client.player || !target.isAlive()) {
@@ -1501,11 +1560,36 @@ jobs:
                       if (client.player.squaredDistanceTo(target) > maxDistSq) {
                           continue;
                       }
-                      Vec3d end = target.getPos().add(0, target.getHeight() * 0.5, 0).subtract(camPos);
-                      lines.vertex(posMat, (float) start.x, (float) start.y, (float) start.z).color(r, g, b, 255).normal(0.0f, 1.0f, 0.0f);
-                      lines.vertex(posMat, (float) end.x, (float) end.y, (float) end.z).color(r, g, b, 255).normal(0.0f, 1.0f, 0.0f);
+
+                      Vec3d rel = new Vec3d(
+                              target.getX() - camPos.x,
+                              target.getY() + target.getHeight() * 0.5 - camPos.y,
+                              target.getZ() - camPos.z
+                      );
+                      Vector3f v = new Vector3f((float) rel.x, (float) rel.y, (float) rel.z).rotate(invRot);
+                      if (v.z >= -0.1f) {
+                          continue;
+                      }
+
+                      double depth = -v.z;
+                      int endX = (int) (sw / 2.0 + (v.x / depth) * f);
+                      int endY = (int) (sh / 2.0 - (v.y / depth) * f);
+                      drawLine2D(context, startX, startY, endX, endY, color);
                   }
-                  RenderSystem.enableDepthTest();
+              }
+
+              private void drawLine2D(DrawContext context, int x0, int y0, int x1, int y1, int color) {
+                  int dx = x1 - x0;
+                  int dy = y1 - y0;
+                  int steps = Math.min(200, Math.max(Math.abs(dx), Math.abs(dy)));
+                  if (steps == 0) {
+                      return;
+                  }
+                  for (int i = 0; i <= steps; i += 2) {
+                      int px = x0 + (dx * i) / steps;
+                      int py = y0 + (dy * i) / steps;
+                      context.fill(px, py, px + 1, py + 1, color);
+                  }
               }
           }
           EOF
@@ -1516,14 +1600,13 @@ jobs:
           import bench.client.core.Category;
           import bench.client.core.DoubleSetting;
           import bench.client.core.Module;
-          import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderContext;
           import net.minecraft.client.MinecraftClient;
-          import net.minecraft.client.font.TextRenderer;
-          import net.minecraft.client.render.VertexConsumerProvider;
-          import net.minecraft.client.util.math.MatrixStack;
+          import net.minecraft.client.gui.DrawContext;
+          import net.minecraft.client.render.Camera;
           import net.minecraft.entity.player.PlayerEntity;
           import net.minecraft.util.math.Vec3d;
-          import org.joml.Matrix4f;
+          import org.joml.Quaternionf;
+          import org.joml.Vector3f;
 
           import java.util.Locale;
 
@@ -1539,20 +1622,20 @@ jobs:
               public void onTick(MinecraftClient client) {
               }
 
-              public void onWorldRender(WorldRenderContext context) {
+              public void renderOverlay(DrawContext context) {
                   MinecraftClient client = MinecraftClient.getInstance();
-                  if (client.player == null || client.world == null) {
+                  if (client.player == null || client.world == null || client.gameRenderer == null) {
                       return;
                   }
-                  MatrixStack matrices = context.matrixStack();
-                  VertexConsumerProvider consumers = context.consumers();
-                  if (matrices == null || consumers == null) {
-                      return;
-                  }
+                  Camera camera = client.gameRenderer.getCamera();
+                  Vec3d camPos = camera.getPos();
+                  Quaternionf invRot = new Quaternionf(camera.getRotation()).conjugate();
 
-                  Vec3d camPos = context.camera().getPos();
+                  int sw = context.getScaledWindowWidth();
+                  int sh = context.getScaledWindowHeight();
+                  double fov = client.options.getFov().getValue();
+                  double f = (sh / 2.0) / Math.tan(Math.toRadians(fov / 2.0));
                   double maxDistSq = range.getValue() * range.getValue();
-                  float s = 0.025f * scale.getValue().floatValue();
 
                   for (PlayerEntity target : client.world.getPlayers()) {
                       if (target == client.player || !target.isAlive()) {
@@ -1562,29 +1645,24 @@ jobs:
                           continue;
                       }
 
-                      Vec3d pos = target.getPos().add(0, target.getHeight() + 0.5, 0).subtract(camPos);
-                      matrices.push();
-                      matrices.translate(pos.x, pos.y, pos.z);
-                      matrices.multiply(context.camera().getRotation());
-                      matrices.scale(s, -s, s);
+                      Vec3d rel = new Vec3d(
+                              target.getX() - camPos.x,
+                              target.getY() + target.getHeight() + 0.4 - camPos.y,
+                              target.getZ() - camPos.z
+                      );
+                      Vector3f v = new Vector3f((float) rel.x, (float) rel.y, (float) rel.z).rotate(invRot);
+                      if (v.z >= -0.1f) {
+                          continue;
+                      }
+
+                      double depth = -v.z;
+                      int sx = (int) (sw / 2.0 + (v.x / depth) * f);
+                      int sy = (int) (sh / 2.0 - (v.y / depth) * f);
 
                       String label = String.format(Locale.ROOT, "%s [%.1f HP]", target.getName().getString(), target.getHealth());
-                      float xOffset = -client.textRenderer.getWidth(label) / 2.0f;
-                      Matrix4f matrix4f = matrices.peek().getPositionMatrix();
-
-                      client.textRenderer.draw(
-                              label,
-                              xOffset,
-                              0.0f,
-                              0xFFFFFFFF,
-                              false,
-                              matrix4f,
-                              consumers,
-                              TextRenderer.TextLayerType.SEE_THROUGH,
-                              0x55000000,
-                              0xF000F0
-                      );
-                      matrices.pop();
+                      int tw = client.textRenderer.getWidth(label);
+                      context.fill(sx - tw / 2 - 2, sy - 2, sx + tw / 2 + 2, sy + 10, 0x80000000);
+                      context.drawTextWithShadow(client.textRenderer, label, sx - tw / 2, sy, 0xFFFFFFFF);
                   }
               }
           }
@@ -1593,19 +1671,26 @@ jobs:
           cat << 'EOF' > src/main/java/bench/client/modules/render/Hud.java
           package bench.client.modules.render;
 
-          import bench.client.BenchClient;
           import bench.client.core.BoolSetting;
           import bench.client.core.Category;
           import bench.client.core.Module;
           import bench.client.core.ModuleManager;
           import net.minecraft.client.MinecraftClient;
           import net.minecraft.client.gui.DrawContext;
+          import net.minecraft.entity.EquipmentSlot;
           import net.minecraft.item.ItemStack;
           import org.lwjgl.glfw.GLFW;
 
           import java.util.Locale;
 
           public class Hud extends Module {
+              private static final EquipmentSlot[] ARMOR_SLOTS = {
+                      EquipmentSlot.HEAD,
+                      EquipmentSlot.CHEST,
+                      EquipmentSlot.LEGS,
+                      EquipmentSlot.FEET
+              };
+
               public final BoolSetting showFps = add(new BoolSetting("FPS", true));
               public final BoolSetting showCoords = add(new BoolSetting("Coords", true));
               public final BoolSetting showSpeed = add(new BoolSetting("Speed", true));
@@ -1652,15 +1737,16 @@ jobs:
                   }
 
                   if (showSpeed.getValue()) {
-                      double dx = client.player.getX() - client.player.prevX;
-                      double dz = client.player.getZ() - client.player.prevZ;
+                      double dx = client.player.getX() - client.player.lastRenderX;
+                      double dz = client.player.getZ() - client.player.lastRenderZ;
                       double bps = Math.hypot(dx, dz) * 20.0;
                       context.drawTextWithShadow(client.textRenderer, String.format(Locale.ROOT, "Speed: %.2f b/s", bps), 6, y, 0xFFFFFF);
                       y += 10;
                   }
 
                   if (showArmor.getValue()) {
-                      for (ItemStack armor : client.player.getInventory().armor) {
+                      for (EquipmentSlot slot : ARMOR_SLOTS) {
+                          ItemStack armor = client.player.getEquippedStack(slot);
                           if (!armor.isEmpty() && armor.isDamageable()) {
                               int remaining = armor.getMaxDamage() - armor.getDamage();
                               String txt = armor.getName().getString() + ": " + remaining + "/" + armor.getMaxDamage();
