@@ -1454,7 +1454,7 @@ jobs:
                       return;
                   }
                   Camera camera = client.gameRenderer.getCamera();
-                  Vec3d camPos = camera.getPos();
+                  Vec3d camPos = client.player.getEyePos();
                   Quaternionf invRot = new Quaternionf(camera.getRotation()).conjugate();
 
                   int sw = context.getScaledWindowWidth();
@@ -1540,7 +1540,7 @@ jobs:
                       return;
                   }
                   Camera camera = client.gameRenderer.getCamera();
-                  Vec3d camPos = camera.getPos();
+                  Vec3d camPos = client.player.getEyePos();
                   Quaternionf invRot = new Quaternionf(camera.getRotation()).conjugate();
 
                   int sw = context.getScaledWindowWidth();
@@ -1628,7 +1628,7 @@ jobs:
                       return;
                   }
                   Camera camera = client.gameRenderer.getCamera();
-                  Vec3d camPos = camera.getPos();
+                  Vec3d camPos = client.player.getEyePos();
                   Quaternionf invRot = new Quaternionf(camera.getRotation()).conjugate();
 
                   int sw = context.getScaledWindowWidth();
