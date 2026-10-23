@@ -12,24 +12,12 @@ import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
-
 import java.util.List;
 
 @Mixin(BlockRenderManager.class)
 public class BlockRenderMixin {
     @Inject(method = "renderBlock", at = @At("HEAD"), cancellable = true)
-    private void onRenderBlock(
-            BlockState state,
-            BlockPos pos,
-            BlockRenderView world,
-            MatrixStack matrices,
-            VertexConsumer vertexConsumer,
-            boolean cull,
-            List<BlockModelPart> parts,
-            CallbackInfo ci
-    ) {
-        if (AllModulesRegistry.shouldHideBlockForXray(state.getBlock())) {
-            ci.cancel();
-        }
+    private void onRenderBlock(BlockState state, BlockPos pos, BlockRenderView world, MatrixStack matrices, VertexConsumer vertexConsumer, boolean cull, List<BlockModelPart> parts, CallbackInfo ci) {
+        if (AllModulesRegistry.shouldHideBlockForXray(state.getBlock())) ci.cancel();
     }
 }

@@ -4,8 +4,5 @@ public class BoolSetting extends Setting<Boolean> {
     public BoolSetting(String name, String description, boolean defaultValue) {
         super(name, description, defaultValue);
     }
-
-    public void toggle() {
-        setValue(!getValue());
-    }
+    public void toggle() { setValue(!getValue()); }
 }

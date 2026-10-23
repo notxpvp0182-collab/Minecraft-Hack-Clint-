@@ -11,12 +11,6 @@ public enum Category {
     FUN("Fun");
 
     private final String title;
-
-    Category(String title) {
-        this.title = title;
-    }
-
-    public String getTitle() {
-        return title;
-    }
+    Category(String title) { this.title = title; }
+    public String getTitle() { return title; }
 }

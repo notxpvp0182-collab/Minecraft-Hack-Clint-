@@ -12,11 +12,8 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 @Mixin(ClientPlayerInteractionManager.class)
 public class ClientPlayerInteractionManagerMixin {
-    @Shadow
-    private int blockBreakingCooldown;
-
-    @Shadow
-    private float currentBreakingProgress;
+    @Shadow private int blockBreakingCooldown;
+    @Shadow private float currentBreakingProgress;
 
     @Inject(method = "updateBlockBreakingProgress", at = @At("HEAD"))
     private void onUpdateBlockBreakingProgress(BlockPos pos, Direction direction, CallbackInfoReturnable<Boolean> cir) {

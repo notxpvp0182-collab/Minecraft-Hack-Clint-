@@ -24,9 +24,7 @@ public class KillAura extends Module {
         if (mc.player == null || mc.world == null || mc.interactionManager == null || mc.currentScreen != null) return;
         LivingEntity target = ModuleUtils.findNearestTarget(mc, range.getValue(), playersOnly.getValue());
         if (target != null) {
-            if (smoothAim.getValue()) {
-                ModuleUtils.smoothAimAt(mc.player, target, 0.45f);
-            }
+            if (smoothAim.getValue()) ModuleUtils.smoothAimAt(mc.player, target, 0.45f);
             if (mc.player.getAttackCooldownProgress(0.5f) >= 0.92f) {
                 mc.interactionManager.attackEntity(mc.player, target);
                 mc.player.swingHand(Hand.MAIN_HAND);

@@ -13,32 +13,11 @@ public abstract class Setting<T> {
         this.defaultValue = defaultValue;
     }
 
-    public String getName() {
-        return name;
-    }
-
-    public String getDescription() {
-        return description;
-    }
-
-    public T getValue() {
-        return value;
-    }
-
-    public T getDefaultValue() {
-        return defaultValue;
-    }
-
-    public void setValue(T value) {
-        this.value = value;
-        SettingManager.save();
-    }
-
-    public void setValueSilent(T value) {
-        this.value = value;
-    }
-
-    public void resetToDefault() {
-        setValue(defaultValue);
-    }
+    public String getName() { return name; }
+    public String getDescription() { return description; }
+    public T getValue() { return value; }
+    public T getDefaultValue() { return defaultValue; }
+    public void setValue(T value) { this.value = value; SettingManager.save(); }
+    public void setValueSilent(T value) { this.value = value; }
+    public void resetToDefault() { setValue(defaultValue); }
 }

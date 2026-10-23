@@ -13,7 +13,6 @@ public class AutoBreed extends Module {
     public final DoubleSetting range = add(new DoubleSetting("Range", "Effective range or intensity for AutoBreed.", 4.5, 1.0, 16.0));
     public final BoolSetting hudIndicator = add(new BoolSetting("HUD Status", "Show status badge when active.", false));
     public final ColorSetting color = add(new ColorSetting("Accent Color", "Highlight color for AutoBreed.", 0xFFDC2626));
-
     private int activeTicks = 0;
 
     public AutoBreed() {
@@ -22,10 +21,7 @@ public class AutoBreed extends Module {
 
     @Override
     public void onTick(MinecraftClient mc) {
-        if (mc.player == null || mc.world == null) {
-            return;
-        }
-        activeTicks++;
+        if (mc.player != null && mc.world != null) activeTicks++;
     }
 
     @Override

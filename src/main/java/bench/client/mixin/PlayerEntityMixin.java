@@ -11,9 +11,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 public class PlayerEntityMixin {
     @Inject(method = "getEntityInteractionRange", at = @At("RETURN"), cancellable = true)
     private void onGetEntityInteractionRange(CallbackInfoReturnable<Double> cir) {
-        double customReach = AllModulesRegistry.getCustomEntityReach();
-        if (customReach > 0.0) {
-            cir.setReturnValue(customReach);
-        }
+        double r = AllModulesRegistry.getCustomEntityReach();
+        if (r > 0.0) cir.setReturnValue(r);
     }
 }

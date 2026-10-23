@@ -14,7 +14,6 @@ import net.minecraft.client.util.InputUtil;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.util.Hand;
 import org.lwjgl.glfw.GLFW;
-
 import java.util.Locale;
 
 public class AutoFightBot extends Module {
@@ -25,11 +24,9 @@ public class AutoFightBot extends Module {
     public final DoubleSetting aimSpeed = add(new DoubleSetting("AimSpeed", "360 smooth aim speed.", 0.38, 0.1, 1.0));
     public final BoolSetting autoWASD = add(new BoolSetting("AutoWASD", "Automatically chase and strafe target.", true));
     public final BoolSetting autoJumpCrit = add(new BoolSetting("AutoJumpCrit", "Jump for critical hits.", true));
-
     private LivingEntity lockedTarget = null;
     private boolean lockHeld = false;
-    private int strafeDir = 1;
-    private int strafeTicks = 0;
+    private int strafeDir = 1, strafeTicks = 0;
 
     public AutoFightBot() {
         super("AutoFightBot", Category.COMBAT, "Full autonomous combat state machine with 360 aim, WASD strafe, and crits.");
@@ -40,10 +37,8 @@ public class AutoFightBot extends Module {
         lockedTarget = null;
         MinecraftClient mc = MinecraftClient.getInstance();
         if (mc != null && mc.options != null) {
-            mc.options.forwardKey.setPressed(false);
-            mc.options.backKey.setPressed(false);
-            mc.options.leftKey.setPressed(false);
-            mc.options.rightKey.setPressed(false);
+            mc.options.forwardKey.setPressed(false); mc.options.backKey.setPressed(false);
+            mc.options.leftKey.setPressed(false); mc.options.rightKey.setPressed(false);
         }
     }
 
@@ -55,43 +50,26 @@ public class AutoFightBot extends Module {
             if (!lockHeld) {
                 lockHeld = true;
                 LivingEntity t = ModuleUtils.findNearestTarget(mc, scanRange.getValue(), playersOnly.getValue());
-                if (t != null) {
-                    lockedTarget = t;
-                    NotificationManager.push("AutoFightBot", "Locked: " + t.getName().getString(), true);
-                }
+                if (t != null) { lockedTarget = t; NotificationManager.push("AutoFightBot", "Locked: " + t.getName().getString(), true); }
             }
-        } else {
-            lockHeld = false;
-        }
+        } else lockHeld = false;
 
-        if (lockedTarget != null && (!lockedTarget.isAlive() || lockedTarget.isDead() || mc.player.squaredDistanceTo(lockedTarget) > scanRange.getValue() * scanRange.getValue())) {
-            lockedTarget = null;
-        }
-        if (lockedTarget == null) {
-            lockedTarget = ModuleUtils.findNearestTarget(mc, scanRange.getValue(), playersOnly.getValue());
-        }
+        if (lockedTarget != null && (!lockedTarget.isAlive() || lockedTarget.isDead() || mc.player.squaredDistanceTo(lockedTarget) > scanRange.getValue() * scanRange.getValue())) lockedTarget = null;
+        if (lockedTarget == null) lockedTarget = ModuleUtils.findNearestTarget(mc, scanRange.getValue(), playersOnly.getValue());
         if (lockedTarget == null) return;
 
         ModuleUtils.smoothAimAt(mc.player, lockedTarget, aimSpeed.getValue().floatValue());
         double dist = Math.sqrt(mc.player.squaredDistanceTo(lockedTarget));
-
         if (autoWASD.getValue()) {
             mc.options.forwardKey.setPressed(dist > 1.4);
             mc.options.backKey.setPressed(dist < 0.9);
             mc.player.setSprinting(true);
             if (dist <= reach.getValue() + 1.2) {
-                if (++strafeTicks > 18 || mc.player.horizontalCollision) {
-                    strafeDir = -strafeDir;
-                    strafeTicks = 0;
-                }
-                mc.options.leftKey.setPressed(strafeDir < 0);
-                mc.options.rightKey.setPressed(strafeDir > 0);
+                if (++strafeTicks > 18 || mc.player.horizontalCollision) { strafeDir = -strafeDir; strafeTicks = 0; }
+                mc.options.leftKey.setPressed(strafeDir < 0); mc.options.rightKey.setPressed(strafeDir > 0);
             }
-            if (autoJumpCrit.getValue() && mc.player.isOnGround() && dist <= reach.getValue() + 1.5) {
-                mc.player.jump();
-            }
+            if (autoJumpCrit.getValue() && mc.player.isOnGround() && dist <= reach.getValue() + 1.5) mc.player.jump();
         }
-
         if (dist <= reach.getValue() && mc.player.getAttackCooldownProgress(0.5f) >= 0.92f) {
             mc.interactionManager.attackEntity(mc.player, lockedTarget);
             mc.player.swingHand(Hand.MAIN_HAND);
@@ -102,8 +80,7 @@ public class AutoFightBot extends Module {
     @Override
     public void onRenderHud(DrawContext ctx) {
         if (lockedTarget != null && lockedTarget.isAlive()) {
-            String txt = String.format(Locale.ROOT, "Target: %s (%.1f HP)", lockedTarget.getName().getString(), lockedTarget.getHealth());
-            ModuleUtils.drawHudBadge(ctx, 8, ctx.getScaledWindowHeight() - 48, txt, 0xFFDC2626);
+            ModuleUtils.drawHudBadge(ctx, 8, ctx.getScaledWindowHeight() - 48, String.format(Locale.ROOT, "Target: %s (%.1f HP)", lockedTarget.getName().getString(), lockedTarget.getHealth()), 0xFFDC2626);
         }
     }
 }

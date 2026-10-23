@@ -7,7 +7,6 @@ import bench.client.modules.ModuleUtils;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.item.Items;
-
 import java.util.Locale;
 
 public class HUD extends Module {

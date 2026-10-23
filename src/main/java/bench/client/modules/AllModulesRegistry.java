@@ -1,6 +1,5 @@
 package bench.client.modules;
 
-import bench.client.core.Module;
 import bench.client.core.ModuleManager;
 import bench.client.modules.combat.*;
 import bench.client.modules.movement.*;
@@ -12,7 +11,6 @@ import bench.client.modules.exploit.*;
 import bench.client.modules.fun.*;
 import net.minecraft.block.Block;
 import net.minecraft.block.Blocks;
-
 import java.util.Set;
 
 public final class AllModulesRegistry {
@@ -38,57 +36,41 @@ public final class AllModulesRegistry {
     private static Timer timerMod;
     private static XRay xrayMod;
 
-    private AllModulesRegistry() {
-    }
+    private AllModulesRegistry() {}
 
     public static boolean shouldHideBlockForXray(Block block) {
         return xrayMod != null && xrayMod.isEnabled() && !XRAY_KEEP.contains(block);
     }
-
     public static double getCustomEntityReach() {
         return (reachMod != null && reachMod.isEnabled()) ? reachMod.range.getValue() : -1.0;
     }
-
     public static boolean isVelocityEnabled() {
         return velocityMod != null && velocityMod.isEnabled();
     }
-
-    public static double getVelocityHorizontal() {
-        return 0.0;
-    }
-
-    public static double getVelocityVertical() {
-        return 0.0;
-    }
-
+    public static double getVelocityHorizontal() { return 0.0; }
+    public static double getVelocityVertical() { return 0.0; }
     public static float getCustomStepHeight() {
         return (stepMod != null && stepMod.isEnabled()) ? stepMod.range.getValue().floatValue() : -1.0f;
     }
-
     public static int getFastPlaceMaxCooldown() {
         return (fastPlaceMod != null && fastPlaceMod.isEnabled()) ? 0 : -1;
     }
-
     public static double getFastBreakMultiplier() {
         return (fastBreakMod != null && fastBreakMod.isEnabled()) ? fastBreakMod.range.getValue() : -1.0;
     }
-
     public static double getTimerSpeedMultiplier() {
         return (timerMod != null && timerMod.isEnabled()) ? Math.max(0.5, Math.min(2.0, timerMod.range.getValue() / 3.0)) : 1.0;
     }
 
     public static void registerAll() {
-        // COMBAT (36)
         ModuleManager.register(new KillAura());
         ModuleManager.register(new MSST());
         ModuleManager.register(new AutoFightBot());
         ModuleManager.register(new AimAssist());
         ModuleManager.register(new TriggerBot());
         ModuleManager.register(new Criticals());
-        reachMod = new Reach();
-        ModuleManager.register(reachMod);
-        velocityMod = new Velocity();
-        ModuleManager.register(velocityMod);
+        reachMod = new Reach(); ModuleManager.register(reachMod);
+        velocityMod = new Velocity(); ModuleManager.register(velocityMod);
         ModuleManager.register(new AutoCrystal());
         ModuleManager.register(new AnchorAura());
         ModuleManager.register(new BedAura());
@@ -118,15 +100,13 @@ public final class AllModulesRegistry {
         ModuleManager.register(new TargetHUD());
         ModuleManager.register(new AttackCooldown());
 
-        // MOVEMENT (27)
         ModuleManager.register(new Fly());
         ModuleManager.register(new Speed());
         ModuleManager.register(new Sprint());
         ModuleManager.register(new NoFall());
         ModuleManager.register(new Jesus());
         ModuleManager.register(new Spider());
-        stepMod = new Step();
-        ModuleManager.register(stepMod);
+        stepMod = new Step(); ModuleManager.register(stepMod);
         ModuleManager.register(new ReverseStep());
         ModuleManager.register(new LongJump());
         ModuleManager.register(new HighJump());
@@ -148,7 +128,6 @@ public final class AllModulesRegistry {
         ModuleManager.register(new AutoWalk());
         ModuleManager.register(new FlightStatusHUD());
 
-        // RENDER (47)
         ModuleManager.register(new ActiveModulesHUD());
         ModuleManager.register(new HUD());
         ModuleManager.register(new PlayerESP());
@@ -169,8 +148,7 @@ public final class AllModulesRegistry {
         ModuleManager.register(new Waypoints());
         ModuleManager.register(new NewerChunks());
         ModuleManager.register(new ShulkerPreview());
-        xrayMod = new XRay();
-        ModuleManager.register(xrayMod);
+        xrayMod = new XRay(); ModuleManager.register(xrayMod);
         ModuleManager.register(new NoRender());
         ModuleManager.register(new Trajectories());
         ModuleManager.register(new Breadcrumbs());
@@ -198,11 +176,9 @@ public final class AllModulesRegistry {
         ModuleManager.register(new Marker());
         ModuleManager.register(new LogoutSpots());
 
-        // PLAYER (45)
         ModuleManager.register(new AutoEat());
         ModuleManager.register(new AutoTool());
-        fastPlaceMod = new FastPlace();
-        ModuleManager.register(fastPlaceMod);
+        fastPlaceMod = new FastPlace(); ModuleManager.register(fastPlaceMod);
         ModuleManager.register(new AirPlace());
         ModuleManager.register(new Scaffold());
         ModuleManager.register(new AutoDisconnect());
@@ -246,7 +222,6 @@ public final class AllModulesRegistry {
         ModuleManager.register(new PacketLogger());
         ModuleManager.register(new Debugger());
 
-        // WORLD (30)
         ModuleManager.register(new Nuker());
         ModuleManager.register(new AutoMine());
         ModuleManager.register(new VeinMiner());
@@ -278,11 +253,8 @@ public final class AllModulesRegistry {
         ModuleManager.register(new Flamethrower());
         ModuleManager.register(new Mining3x3());
 
-        // MISC (23)
-        timerMod = new Timer();
-        ModuleManager.register(timerMod);
-        fastBreakMod = new FastBreak();
-        ModuleManager.register(fastBreakMod);
+        timerMod = new Timer(); ModuleManager.register(timerMod);
+        fastBreakMod = new FastBreak(); ModuleManager.register(fastBreakMod);
         ModuleManager.register(new Sneak());
         ModuleManager.register(new Spam());
         ModuleManager.register(new ChatPrefix());
@@ -305,7 +277,6 @@ public final class AllModulesRegistry {
         ModuleManager.register(new KeystrokesHUD());
         ModuleManager.register(new Notifications());
 
-        // EXPLOIT (21)
         ModuleManager.register(new Disabler());
         ModuleManager.register(new AntiKick());
         ModuleManager.register(new FlightBypass());
@@ -328,7 +299,6 @@ public final class AllModulesRegistry {
         ModuleManager.register(new MaceDMG());
         ModuleManager.register(new MultiAura());
 
-        // FUN (1)
         ModuleManager.register(new Jetpack());
     }
 }

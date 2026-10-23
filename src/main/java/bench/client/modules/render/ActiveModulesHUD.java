@@ -6,7 +6,6 @@ import bench.client.core.Module;
 import bench.client.core.ModuleManager;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.DrawContext;
-
 import java.util.ArrayList;
 import java.util.List;
 
@@ -23,15 +22,9 @@ public class ActiveModulesHUD extends Module {
         MinecraftClient mc = MinecraftClient.getInstance();
         if (mc.player == null) return;
         List<Module> active = new ArrayList<>();
-        for (Module m : ModuleManager.all()) {
-            if (m.isEnabled() && m != this) {
-                active.add(m);
-            }
-        }
+        for (Module m : ModuleManager.all()) if (m.isEnabled() && m != this) active.add(m);
         active.sort((a, b) -> Integer.compare(mc.textRenderer.getWidth(b.getName()), mc.textRenderer.getWidth(a.getName())));
-        int sw = ctx.getScaledWindowWidth();
-        int y = 6;
-        int col = accent.getValue();
+        int sw = ctx.getScaledWindowWidth(), y = 6, col = accent.getValue();
         for (Module m : active) {
             String name = m.getName();
             int w = mc.textRenderer.getWidth(name);

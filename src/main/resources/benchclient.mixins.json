@@ -1,0 +1,18 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "bench.client.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "client": [
+    "BlockRenderMixin",
+    "PlayerEntityMixin",
+    "ClientPlayerEntityMixin",
+    "EntityStepMixin",
+    "GameRendererMixin",
+    "MinecraftClientMixin",
+    "ClientPlayerInteractionManagerMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

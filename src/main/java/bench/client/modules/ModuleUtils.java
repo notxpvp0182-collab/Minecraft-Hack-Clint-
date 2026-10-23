@@ -1,7 +1,6 @@
 package bench.client.modules;
 
 import bench.client.core.ClientDataManager;
-import net.minecraft.block.BlockPos;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.network.ClientPlayerEntity;
@@ -11,33 +10,28 @@ import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.entity.player.PlayerInventory;
 import net.minecraft.item.Item;
+import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.Vec3d;
 import org.joml.Quaternionf;
 import org.joml.Vector3f;
-
 import java.util.ArrayList;
 import java.util.List;
 
 public final class ModuleUtils {
-    private ModuleUtils() {
-    }
+    private ModuleUtils() {}
 
     public static LivingEntity findNearestTarget(MinecraftClient mc, double maxRange, boolean playersOnly) {
         if (mc.player == null || mc.world == null) return null;
-        double maxSq = maxRange * maxRange;
+        double maxSq = maxRange * maxRange, bestSq = maxSq;
         LivingEntity best = null;
-        double bestSq = maxSq;
         for (Entity e : mc.world.getEntities()) {
             if (e == mc.player || !(e instanceof LivingEntity liv) || !liv.isAlive() || liv.isDead()) continue;
             if (playersOnly && !(liv instanceof PlayerEntity)) continue;
             if (liv instanceof PlayerEntity p && ClientDataManager.isFriend(p.getName().getString())) continue;
             double dSq = mc.player.squaredDistanceTo(liv);
-            if (dSq <= bestSq) {
-                bestSq = dSq;
-                best = liv;
-            }
+            if (dSq <= bestSq) { bestSq = dSq; best = liv; }
         }
         return best;
     }
@@ -54,24 +48,18 @@ public final class ModuleUtils {
         float s = MathHelper.clamp(speed, 0.05f, 1.0f);
         float newYaw = player.getYaw() + dYaw * s;
         float newPitch = MathHelper.clamp(player.getPitch() + dPitch * s, -89.0f, 89.0f);
-        player.setYaw(newYaw);
-        player.setPitch(newPitch);
-        player.headYaw = newYaw;
-        player.bodyYaw = newYaw;
+        player.setYaw(newYaw); player.setPitch(newPitch);
+        player.headYaw = newYaw; player.bodyYaw = newYaw;
     }
 
     public static int findHotbarItem(PlayerInventory inv, Item item) {
-        for (int i = 0; i < 9; i++) {
-            if (inv.getStack(i).isOf(item)) return i;
-        }
+        for (int i = 0; i < 9; i++) if (inv.getStack(i).isOf(item)) return i;
         return -1;
     }
 
     public static int countItem(PlayerInventory inv, Item item) {
         int c = 0;
-        for (int i = 0; i < inv.size(); i++) {
-            if (inv.getStack(i).isOf(item)) c += inv.getStack(i).getCount();
-        }
+        for (int i = 0; i < inv.size(); i++) if (inv.getStack(i).isOf(item)) c += inv.getStack(i).getCount();
         return c;
     }
 

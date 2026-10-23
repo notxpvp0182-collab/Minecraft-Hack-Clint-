@@ -14,8 +14,6 @@ public class GameRendererMixin {
     @Inject(method = "getNightVisionStrength", at = @At("HEAD"), cancellable = true)
     private static void onGetNightVisionStrength(LivingEntity entity, float tickDelta, CallbackInfoReturnable<Float> cir) {
         Module fb = ModuleManager.byName("Fullbright");
-        if (fb != null && fb.isEnabled()) {
-            cir.setReturnValue(1.0f);
-        }
+        if (fb != null && fb.isEnabled()) cir.setReturnValue(1.0f);
     }
 }

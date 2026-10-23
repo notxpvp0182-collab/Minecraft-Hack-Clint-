@@ -14,10 +14,8 @@ public class EntityStepMixin {
     private void onGetStepHeight(CallbackInfoReturnable<Float> cir) {
         MinecraftClient client = MinecraftClient.getInstance();
         if (client != null && (Object) this == client.player) {
-            float customStep = AllModulesRegistry.getCustomStepHeight();
-            if (customStep > 0.0f) {
-                cir.setReturnValue(customStep);
-            }
+            float s = AllModulesRegistry.getCustomStepHeight();
+            if (s > 0.0f) cir.setReturnValue(s);
         }
     }
 }
