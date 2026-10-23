@@ -1863,7 +1863,7 @@ jobs:
                                   }
                               }
                           }
-                          drawHudBadge(context, 8, context.getScaledWindowHeight() - 28, "3x3 Preview: " + validCount + " blocks (" + side.getName() + ")", 0xFF10B981);
+                          drawHudBadge(context, 8, context.getScaledWindowHeight() - 28, "3x3 Preview: " + validCount + " blocks (" + side.asString() + ")", 0xFF10B981);
                       }
                   });
 
@@ -2364,7 +2364,7 @@ jobs:
                                   client.player.getX(),
                                   client.player.getY(),
                                   client.player.getZ(),
-                                  dir.getName().toUpperCase(Locale.ROOT)
+                                  dir.asString().toUpperCase(Locale.ROOT)
                           );
                           drawHudBadge(context, getHudX(), getHudY(), txt, 0xFF2563EB);
                       }
