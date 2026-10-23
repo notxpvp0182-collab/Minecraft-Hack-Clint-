@@ -8,12 +8,20 @@ import bench.client.core.Module;
 import bench.client.modules.ModuleUtils;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.DrawContext;
+import net.minecraft.entity.Entity;
+import net.minecraft.entity.ItemEntity;
+import net.minecraft.entity.LivingEntity;
+import net.minecraft.entity.player.PlayerEntity;
+import net.minecraft.util.math.Vec3d;
+
+import java.util.Locale;
 
 public class MobESP extends Module {
-    public final DoubleSetting range = add(new DoubleSetting("Range", "Effective range or intensity for MobESP.", 4.5, 1.0, 16.0));
-    public final BoolSetting hudIndicator = add(new BoolSetting("HUD Status", "Show status badge when active.", false));
-    public final ColorSetting color = add(new ColorSetting("Accent Color", "Highlight color for MobESP.", 0xFFDC2626));
-    private int activeTicks = 0;
+    public final DoubleSetting range = add(new DoubleSetting("Mob Distance", "Configure Mob Distance for MobESP.", 48.0, 8.0, 96.0));
+    public final BoolSetting secondaryToggle = add(new BoolSetting("Include Passive", "Toggle Include Passive for MobESP.", true));
+    public final ColorSetting themeColor = add(new ColorSetting("MobESP Color", "Custom color for MobESP.", 0xFF10B981));
+
+    private int tickCounter = 0;
 
     public MobESP() {
         super("MobESP", Category.RENDER, "Highlights hostile and passive mobs.");
@@ -21,13 +29,27 @@ public class MobESP extends Module {
 
     @Override
     public void onTick(MinecraftClient mc) {
-        if (mc.player != null && mc.world != null) activeTicks++;
+        if (mc.player == null || mc.world == null) return;
+        tickCounter++;
     }
 
     @Override
     public void onRenderHud(DrawContext ctx) {
-        if (hudIndicator.getValue()) {
-            ModuleUtils.drawHudBadge(ctx, getHudX(), getHudY(), "MobESP [" + activeTicks + "t]", color.getValue());
+        MinecraftClient mc = MinecraftClient.getInstance();
+        if (mc.player == null || mc.world == null) return;
+        if ("render".equals("render")) {
+            double maxSq = range.getValue() * range.getValue();
+            for (Entity e : mc.world.getEntities()) {
+                if (e == mc.player || mc.player.squaredDistanceTo(e) > maxSq) continue;
+                if (e instanceof PlayerEntity || (secondaryToggle.getValue() && (e instanceof LivingEntity || e instanceof ItemEntity))) {
+                    int[] scr = ModuleUtils.worldToScreen(ctx, new Vec3d(e.getX(), e.getY() + e.getHeight() * 0.5, e.getZ()));
+                    if (scr != null) {
+                        ctx.fill(scr[0] - 4, scr[1] - 4, scr[0] + 4, scr[1] + 4, themeColor.getValue());
+                    }
+                }
+            }
+        } else if (secondaryToggle.getValue()) {
+            ModuleUtils.drawHudBadge(ctx, getHudX(), getHudY(), String.format(Locale.ROOT, "MobESP: %.1f", range.getValue()), themeColor.getValue());
         }
     }
 }

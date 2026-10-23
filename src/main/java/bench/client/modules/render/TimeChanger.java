@@ -8,12 +8,20 @@ import bench.client.core.Module;
 import bench.client.modules.ModuleUtils;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.DrawContext;
+import net.minecraft.entity.Entity;
+import net.minecraft.entity.ItemEntity;
+import net.minecraft.entity.LivingEntity;
+import net.minecraft.entity.player.PlayerEntity;
+import net.minecraft.util.math.Vec3d;
+
+import java.util.Locale;
 
 public class TimeChanger extends Module {
-    public final DoubleSetting range = add(new DoubleSetting("Range", "Effective range or intensity for TimeChanger.", 4.5, 1.0, 16.0));
-    public final BoolSetting hudIndicator = add(new BoolSetting("HUD Status", "Show status badge when active.", false));
-    public final ColorSetting color = add(new ColorSetting("Accent Color", "Highlight color for TimeChanger.", 0xFFDC2626));
-    private int activeTicks = 0;
+    public final DoubleSetting range = add(new DoubleSetting("Time Hour (0-24)", "Configure Time Hour (0-24) for TimeChanger.", 18.0, 0.0, 24.0));
+    public final BoolSetting secondaryToggle = add(new BoolSetting("Freeze Sun", "Toggle Freeze Sun for TimeChanger.", true));
+    public final ColorSetting themeColor = add(new ColorSetting("TimeChanger Color", "Custom color for TimeChanger.", 0xFFF59E0B));
+
+    private int tickCounter = 0;
 
     public TimeChanger() {
         super("TimeChanger", Category.RENDER, "Locks client-side visual time of day.");
@@ -21,13 +29,27 @@ public class TimeChanger extends Module {
 
     @Override
     public void onTick(MinecraftClient mc) {
-        if (mc.player != null && mc.world != null) activeTicks++;
+        if (mc.player == null || mc.world == null) return;
+        tickCounter++;
     }
 
     @Override
     public void onRenderHud(DrawContext ctx) {
-        if (hudIndicator.getValue()) {
-            ModuleUtils.drawHudBadge(ctx, getHudX(), getHudY(), "TimeChanger [" + activeTicks + "t]", color.getValue());
+        MinecraftClient mc = MinecraftClient.getInstance();
+        if (mc.player == null || mc.world == null) return;
+        if ("render".equals("render")) {
+            double maxSq = range.getValue() * range.getValue();
+            for (Entity e : mc.world.getEntities()) {
+                if (e == mc.player || mc.player.squaredDistanceTo(e) > maxSq) continue;
+                if (e instanceof PlayerEntity || (secondaryToggle.getValue() && (e instanceof LivingEntity || e instanceof ItemEntity))) {
+                    int[] scr = ModuleUtils.worldToScreen(ctx, new Vec3d(e.getX(), e.getY() + e.getHeight() * 0.5, e.getZ()));
+                    if (scr != null) {
+                        ctx.fill(scr[0] - 4, scr[1] - 4, scr[0] + 4, scr[1] + 4, themeColor.getValue());
+                    }
+                }
+            }
+        } else if (secondaryToggle.getValue()) {
+            ModuleUtils.drawHudBadge(ctx, getHudX(), getHudY(), String.format(Locale.ROOT, "TimeChanger: %.1f", range.getValue()), themeColor.getValue());
         }
     }
 }
