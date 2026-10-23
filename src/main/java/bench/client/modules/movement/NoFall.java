@@ -1,33 +1,35 @@
 package bench.client.modules.movement;
 
-import bench.client.core.BoolSetting;
 import bench.client.core.Category;
-import bench.client.core.ColorSetting;
 import bench.client.core.DoubleSetting;
+import bench.client.core.EnumSetting;
 import bench.client.core.Module;
-import bench.client.modules.ModuleUtils;
 import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gui.DrawContext;
+import net.minecraft.network.packet.c2s.play.PlayerMoveC2SPacket;
+import net.minecraft.util.math.Vec3d;
 
 public class NoFall extends Module {
-    public final DoubleSetting range = add(new DoubleSetting("Range", "Effective range or intensity for NoFall.", 4.5, 1.0, 16.0));
-    public final BoolSetting hudIndicator = add(new BoolSetting("HUD Status", "Show status badge when active.", false));
-    public final ColorSetting color = add(new ColorSetting("Accent Color", "Highlight color for NoFall.", 0xFFDC2626));
-    private int activeTicks = 0;
+    public enum NoFallMode { PACKET, VOID }
+
+    public final EnumSetting<NoFallMode> mode = add(new EnumSetting<>("Mode", "Packet ground spoof or Void bounce.", NoFallMode.PACKET));
+    public final DoubleSetting threshold = add(new DoubleSetting("Fall Distance Threshold", "Minimum fall distance to activate.", 2.5, 1.5, 6.0));
 
     public NoFall() {
-        super("NoFall", Category.MOVEMENT, "Negates fall damage via ground packet spoof.");
+        super("NoFall", Category.MOVEMENT, "Negates fall damage via ground packet spoof or void arrest.");
     }
 
     @Override
     public void onTick(MinecraftClient mc) {
-        if (mc.player != null && mc.world != null) activeTicks++;
-    }
-
-    @Override
-    public void onRenderHud(DrawContext ctx) {
-        if (hudIndicator.getValue()) {
-            ModuleUtils.drawHudBadge(ctx, getHudX(), getHudY(), "NoFall [" + activeTicks + "t]", color.getValue());
+        if (mc.player == null || mc.player.isOnGround()) return;
+        if (mc.player.fallDistance >= threshold.getValue()) {
+            if (mode.getValue() == NoFallMode.VOID && mc.player.getY() < -60) {
+                Vec3d v = mc.player.getVelocity();
+                mc.player.setVelocity(v.x, 0.0, v.z);
+            }
+            mc.player.fallDistance = 0.0f;
+            if (mc.getNetworkHandler() != null) {
+                mc.getNetworkHandler().sendPacket(new PlayerMoveC2SPacket.OnGroundOnly(true, mc.player.horizontalCollision));
+            }
         }
     }
 }
