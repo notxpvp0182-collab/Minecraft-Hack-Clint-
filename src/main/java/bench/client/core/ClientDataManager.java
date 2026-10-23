@@ -40,6 +40,18 @@ public final class ClientDataManager {
         }
     }
     public static boolean isFriend(String name) { return name != null && FRIENDS.contains(name.toLowerCase(Locale.ROOT)); }
+    public static void toggleFriend(String name) {
+        if (name == null || name.isBlank()) return;
+        String key = name.toLowerCase(Locale.ROOT);
+        if (FRIENDS.contains(key)) {
+            FRIENDS.remove(key);
+            NotificationManager.push("Friends", "Removed " + name, false);
+        } else {
+            FRIENDS.add(key);
+            NotificationManager.push("Friends", "Added " + name, true);
+        }
+        SettingManager.save();
+    }
     public static Set<String> getFriends() { return Collections.unmodifiableSet(FRIENDS); }
     public static void setFriendsFromConfig(List<String> list) {
         FRIENDS.clear();

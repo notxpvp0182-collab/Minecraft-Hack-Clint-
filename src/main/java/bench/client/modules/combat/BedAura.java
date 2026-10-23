@@ -84,7 +84,7 @@ public class BedAura extends Module {
         if (mc.player == null || mc.world == null) return;
         tickTimer++;
         if (mc.interactionManager == null || mc.currentScreen != null || tickTimer < delay.getValue()) return;
-        if (safeDimensionCheck.getValue() && mc.world.getDimension().bedWorks()) return;
+        if (safeDimensionCheck.getValue() && mc.world.getRegistryKey() == net.minecraft.world.World.OVERWORLD) return;
         if (mc.crosshairTarget instanceof BlockHitResult bhr && mc.crosshairTarget.getType() == HitResult.Type.BLOCK) {
             if (mc.world.getBlockState(bhr.getBlockPos()).isIn(BlockTags.BEDS)) {
                 mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, bhr);
