@@ -69,7 +69,7 @@ import java.util.Locale;
 
 public class Backtrack extends Module {
     public final IntSetting maxLatencyMs = add(new IntSetting("Window (ms)", "Backtrack position history window.", 200, 50, 600));
-    public final ColorSettingtrailColor = add(new ColorSetting("Marker Color", "Backtrack ghost marker color.", 0xFFEF4444));
+    public final ColorSetting trailColor = add(new ColorSetting("Marker Color", "Backtrack ghost marker color.", 0xFFEF4444));
     public final BoolSetting renderGhost = add(new BoolSetting("Render Ghost", "Show recorded position marker.", true));
 
     private int tickTimer = 0;
