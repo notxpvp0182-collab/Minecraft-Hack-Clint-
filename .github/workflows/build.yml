@@ -500,7 +500,7 @@ jobs:
                       return "NONE";
                   }
                   try {
-                      return InputUtil.fromKeyCode(code, 0).getLocalizedText().getString().toUpperCase();
+                      return InputUtil.Type.KEYSYM.createFromCode(code).getLocalizedText().getString().toUpperCase();
                   } catch (Exception e) {
                       return "KEY_" + code;
                   }
@@ -578,7 +578,7 @@ jobs:
                       return "NONE";
                   }
                   try {
-                      return InputUtil.fromKeyCode(keyBind, 0).getLocalizedText().getString().toUpperCase();
+                      return InputUtil.Type.KEYSYM.createFromCode(keyBind).getLocalizedText().getString().toUpperCase();
                   } catch (Exception e) {
                       return "KEY_" + keyBind;
                   }
@@ -823,10 +823,6 @@ jobs:
           import java.util.Locale;
           import java.util.Map;
 
-          /**
-           * Wurst-Style Multi-Window ClickGUI + Settings/Keybind Inspector Panel.
-           * Every color uses 0xFF alpha prefix as required by Minecraft 1.21.11 DrawContext.
-           */
           public class ClickGui extends Screen {
               private static final Map<Category, int[]> WINDOW_POS = new EnumMap<>(Category.class);
               private static final Map<Category, Boolean> WINDOW_COLLAPSED = new EnumMap<>(Category.class);
@@ -872,10 +868,8 @@ jobs:
 
               @Override
               public void render(DrawContext context, int mouseX, int mouseY, float delta) {
-                  // Translucent dark backdrop
                   context.fill(0, 0, this.width, this.height, 0x8808080C);
 
-                  // Top Wurst-style banner bar
                   context.fill(0, 0, this.width, 20, 0xEE14141E);
                   context.fill(0, 19, this.width, 20, 0xFFFF8800);
                   context.drawTextWithShadow(
@@ -886,7 +880,6 @@ jobs:
                           0xFFFFFFFF
                   );
 
-                  // Render each Wurst category window
                   for (Category cat : Category.values()) {
                       int[] pos = WINDOW_POS.get(cat);
                       int wx = pos[0];
@@ -894,7 +887,6 @@ jobs:
                       boolean collapsed = WINDOW_COLLAPSED.getOrDefault(cat, false);
                       List<Module> modules = ModuleManager.byCategory(cat);
 
-                      // Window Header (Wurst orange/dark theme)
                       context.fill(wx, wy, wx + COL_WIDTH, wy + HEADER_HEIGHT, 0xFF232332);
                       context.fill(wx, wy, wx + COL_WIDTH, wy + 2, 0xFFFF8800);
                       context.drawTextWithShadow(this.textRenderer, cat.getTitle(), wx + 5, wy + 4, 0xFFFFFFFF);
@@ -933,7 +925,6 @@ jobs:
                               drawBorder(context, wx + 2, my, COL_WIDTH - 4, MOD_HEIGHT, 0xFFFFAA00);
                           }
 
-                          // Module Name (with 0xFF alpha so it is ALWAYS visible!)
                           context.drawTextWithShadow(
                                   this.textRenderer,
                                   mod.getName(),
@@ -942,7 +933,6 @@ jobs:
                                   enabled ? 0xFFFFFFFF : 0xFFE0E0E0
                           );
 
-                          // Settings [+] button on the right side of each module row (works with Left or Right click)
                           context.drawTextWithShadow(
                                   this.textRenderer,
                                   "+",
@@ -955,7 +945,6 @@ jobs:
                       }
                   }
 
-                  // Render Right-side Module Settings & Keybind Inspector Window
                   renderInspectorWindow(context, mouseX, mouseY);
               }
 
@@ -968,7 +957,6 @@ jobs:
                   int rows = 2 + settings.size();
                   int bodyH = rows * 21 + 10;
 
-                  // Header
                   context.fill(inspectorX, inspectorY, inspectorX + INSPECTOR_WIDTH, inspectorY + HEADER_HEIGHT, 0xFF262638);
                   context.fill(inspectorX, inspectorY, inspectorX + INSPECTOR_WIDTH, inspectorY + 2, 0xFF00C8FF);
                   context.drawTextWithShadow(
@@ -979,7 +967,6 @@ jobs:
                           0xFFFFFFFF
                   );
 
-                  // Body
                   context.fill(
                           inspectorX,
                           inspectorY + HEADER_HEIGHT,
@@ -993,14 +980,12 @@ jobs:
                   int sy = inspectorY + HEADER_HEIGHT + 5;
                   int sw = INSPECTOR_WIDTH - 12;
 
-                  // Row 1: Module Enable/Disable Toggle
                   int toggleBg = selectedModule.isEnabled() ? 0xFF289644 : 0xFF7A2828;
                   context.fill(sx, sy, sx + sw, sy + 18, toggleBg);
                   String stateTxt = "State: " + (selectedModule.isEnabled() ? "ENABLED" : "DISABLED");
                   context.drawTextWithShadow(this.textRenderer, stateTxt, sx + 5, sy + 5, 0xFFFFFFFF);
                   sy += 21;
 
-                  // Row 2: Module Toggle Keybind Button
                   boolean listeningMod = (listeningModuleBind == selectedModule);
                   int bindBg = listeningMod ? 0xFFD48800 : 0xFF2C2C42;
                   context.fill(sx, sy, sx + sw, sy + 18, bindBg);
@@ -1010,7 +995,6 @@ jobs:
                   context.drawTextWithShadow(this.textRenderer, bindLabel, sx + 5, sy + 5, 0xFFFFEE55);
                   sy += 21;
 
-                  // Module Settings Rows
                   for (Setting<?> setting : settings) {
                       context.fill(sx, sy, sx + sw, sy + 18, 0xFF242436);
 
@@ -1067,7 +1051,6 @@ jobs:
                   double mouseY = click.y();
                   int button = click.button();
 
-                  // Check Inspector Window interaction first
                   if (selectedModule != null) {
                       if (mouseX >= inspectorX && mouseX <= inspectorX + INSPECTOR_WIDTH
                               && mouseY >= inspectorY && mouseY <= inspectorY + HEADER_HEIGHT) {
@@ -1083,14 +1066,12 @@ jobs:
                       int sy = inspectorY + HEADER_HEIGHT + 5;
                       int sw = INSPECTOR_WIDTH - 12;
 
-                      // Row 1: State toggle
                       if (mouseX >= sx && mouseX <= sx + sw && mouseY >= sy && mouseY <= sy + 18) {
                           selectedModule.toggle();
                           return true;
                       }
                       sy += 21;
 
-                      // Row 2: Keybind button
                       if (mouseX >= sx && mouseX <= sx + sw && mouseY >= sy && mouseY <= sy + 18) {
                           if (button == 1) {
                               selectedModule.setKeyBind(GLFW.GLFW_KEY_UNKNOWN);
@@ -1103,7 +1084,6 @@ jobs:
                       }
                       sy += 21;
 
-                      // Settings rows
                       for (Setting<?> setting : selectedModule.getSettings()) {
                           if (mouseX >= sx && mouseX <= sx + sw && mouseY >= sy && mouseY <= sy + 18) {
                               listeningModuleBind = null;
@@ -1128,7 +1108,6 @@ jobs:
                       }
                   }
 
-                  // Check Category Windows
                   for (Category cat : Category.values()) {
                       int[] pos = WINDOW_POS.get(cat);
                       int wx = pos[0];
@@ -1152,7 +1131,6 @@ jobs:
                       int my = wy + HEADER_HEIGHT + 2;
                       for (Module mod : ModuleManager.byCategory(cat)) {
                           if (mouseX >= wx + 2 && mouseX <= wx + COL_WIDTH - 2 && mouseY >= my && mouseY <= my + MOD_HEIGHT) {
-                              // Right-click OR clicking the [+] icon on the right opens settings
                               if (button == 1 || mouseX >= wx + COL_WIDTH - 16) {
                                   selectedModule = mod;
                                   listeningModuleBind = null;
@@ -1277,15 +1255,6 @@ jobs:
 
           import java.util.Locale;
 
-          /**
-           * Full Auto-PvP / AutoFight Combo Module:
-           * - Lock Target Keybind (customizable in ClickGUI)
-           * - TargetMode: PLAYERS or ALL
-           * - 360-degree smooth human-like aim rotation (works in 1st, 2nd, and 3rd person)
-           * - Auto WASD chase + Strafe combo + W-Tap sprint reset + Auto Jump Criticals
-           * - Attacks at 3.0 block reach (configurable)
-           * - Automatically switches to a new target if the current target dies
-           */
           public class AutoFight extends Module {
               public enum TargetMode {
                   PLAYERS,
@@ -1327,7 +1296,6 @@ jobs:
                       return;
                   }
 
-                  // 1. Check Lock Target Keybind press to lock onto crosshair / nearest target
                   int lockCode = lockTargetKey.getValue();
                   if (lockCode != GLFW.GLFW_KEY_UNKNOWN && lockCode > 0) {
                       boolean down = InputUtil.isKeyPressed(client.getWindow(), lockCode);
@@ -1347,7 +1315,6 @@ jobs:
                       }
                   }
 
-                  // 2. If locked target died, despawned, or went out of range, automatically acquire next target
                   double maxScanSq = searchRange.getValue() * searchRange.getValue();
                   if (lockedTarget != null) {
                       if (!lockedTarget.isAlive() || lockedTarget.isDead() || lockedTarget.isRemoved()
@@ -1365,13 +1332,11 @@ jobs:
                       return;
                   }
 
-                  // 3. 360-degree Smooth Human-like Aim Rotation (works in 1st, 2nd, and 3rd person perspectives)
                   smoothRotateTowards(client.player, lockedTarget, aimSpeed.getValue().floatValue());
 
                   double dist = Math.sqrt(client.player.squaredDistanceTo(lockedTarget));
                   double reach = hitReach.getValue();
 
-                  // 4. Auto WASD Movement + Sprint + Strafe Combo + Auto Jump Criticals
                   if (autoMoveCombo.getValue()) {
                       if (wTapTicks > 0) {
                           wTapTicks--;
@@ -1396,7 +1361,6 @@ jobs:
                           client.options.rightKey.setPressed(false);
                       }
 
-                      // Auto Jump for critical hits when within combat range or obstacle ahead
                       if (autoJumpCrit.getValue() && client.player.isOnGround()) {
                           if (dist <= reach + 1.5 || client.player.horizontalCollision) {
                               client.player.jump();
@@ -1404,7 +1368,6 @@ jobs:
                       }
                   }
 
-                  // 5. Attack at configured reach (default 3.0 blocks) timed with weapon cooldown & critical fall
                   if (dist <= reach) {
                       float cooldown = client.player.getAttackCooldownProgress(0.5f);
                       boolean readyToCrit = !autoJumpCrit.getValue()
@@ -1415,7 +1378,6 @@ jobs:
                       if (cooldown >= 0.92f && readyToCrit) {
                           client.interactionManager.attackEntity(client.player, lockedTarget);
                           client.player.swingHand(Hand.MAIN_HAND);
-                          // Brief W-Tap sprint reset for maximum combo knockback
                           wTapTicks = 2;
                       }
                   }
@@ -1520,9 +1482,6 @@ jobs:
           import net.minecraft.entity.LivingEntity;
           import net.minecraft.entity.player.PlayerEntity;
 
-          /**
-           * Smooth 360-degree human-like AimAssist that works in 1st, 2nd, and 3rd person.
-           */
           public class AimAssist extends Module {
               public final DoubleSetting range = add(new DoubleSetting("Range", 5.0, 2.5, 8.0));
               public final DoubleSetting speed = add(new DoubleSetting("SmoothSpeed", 0.30, 0.05, 1.0));
